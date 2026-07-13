@@ -1,0 +1,1256 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+body {
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+  background-color: var(--theme-background);
+  color: var(--theme-text-color);
+  transition: background 0.3s ease;
+}
+
+/* Canvas Container */
+.mindmap-app {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  color: var(--theme-text-color);
+}
+
+.canvas-container {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  cursor: grab;
+  outline: none;
+}
+
+.canvas-container:active {
+  cursor: grabbing;
+}
+
+.canvas-transform {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  display: inline-block;
+}
+
+/* SVG Overlay for Connections */
+.svg-connections {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.connection-path {
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke 0.3s ease;
+}
+
+/* MindMap Tree Layout (Horizontal Flex) */
+.tree-container {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto; /* Re-enable pointer events for nodes */
+}
+
+.tree-branch {
+  display: flex;
+  align-items: center;
+  position: relative;
+  z-index: 2; /* Render node cards on top of connection lines to avoid click blocking */
+  transition: margin 0.25s ease-out;
+}
+
+.tree-branch.has-boundary {
+  margin-top: 14px;
+  margin-bottom: 14px;
+}
+
+/* Horizontal spacing for Org Chart and Timeline siblings */
+.tree-branch.structure-org.has-boundary,
+.tree-branch.structure-timeline.has-boundary {
+  margin-top: 0;
+  margin-bottom: 0;
+  margin-left: 14px;
+  margin-right: 14px;
+}
+
+/* Position top-level trees absolutely to isolate them from layout/flow shifts */
+.tree-container > .tree-branch {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.node-row {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.tree-children {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 28px; /* Increased vertical spacing to prevent sibling overlap */
+  margin-left: 80px; /* Increased parent-child column spacing */
+  position: relative;
+  flex-shrink: 0; /* Prevent children column shrinking */
+}
+
+/* Layout structures override rules */
+
+/* 1. Balanced Mind Map (Classic Mind Map) */
+.node-row.mindmap-root-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  position: relative;
+  height: 40px; /* Lock height to match the root node card to prevent vertical shifting */
+}
+
+.node-row.mindmap-root-row > .tree-children.layout-left {
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-right: 80px;
+  margin-left: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.node-row.mindmap-root-row > .tree-children.layout-right {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 80px;
+  margin-right: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Absolute positioning for root children in other layout structures */
+.tree-branch.node-root.structure-logic > .node-row > .tree-children,
+.tree-branch.node-root.structure-brace > .node-row > .tree-children,
+.tree-branch.node-root.structure-fishbone > .node-row > .tree-children {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 80px;
+  margin-right: 0;
+  margin-top: 0;
+}
+
+.tree-branch.node-root.structure-logic-left > .node-row > .tree-children {
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-right: 80px;
+  margin-left: 0;
+  margin-top: 0;
+}
+
+.tree-branch.node-root.structure-org > .node-row > .tree-children {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 45px;
+  margin-left: 0;
+  margin-right: 0;
+  display: flex;
+  flex-direction: row;
+}
+
+.tree-branch.node-root.structure-tree > .node-row > .tree-children {
+  position: absolute;
+  top: 100%;
+  left: 32px;
+  margin-top: 10px;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* 2. Left Direction Layouts (Logic Left / Left branches of Mind Map) */
+.tree-branch.layout-left,
+.tree-branch.structure-logic-left {
+  justify-content: flex-end;
+}
+
+.tree-branch.layout-left > .node-row,
+.tree-branch.structure-logic-left > .node-row {
+  flex-direction: row-reverse;
+}
+
+.tree-branch.layout-left > .node-row > .tree-children,
+.tree-branch.structure-logic-left > .node-row > .tree-children {
+  margin-left: 0;
+  margin-right: 80px; /* Shift spacing to left of parent */
+}
+
+/* 3. Organization Chart (Top Down layout) */
+.tree-branch.structure-org {
+  flex-direction: column;
+  align-items: center;
+}
+
+.tree-branch.structure-org > .node-row {
+  flex-direction: column;
+  align-items: center;
+}
+
+.tree-branch.structure-org > .node-row > .tree-children {
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: center;
+  margin-left: 0;
+  margin-top: 45px;
+  gap: 28px;
+}
+
+/* 4. Tree Chart (Vertical indentation list layout) */
+.tree-branch.structure-tree {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.tree-branch.structure-tree > .node-row {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.tree-branch.structure-tree > .node-row > .tree-children {
+  flex-direction: column;
+  align-items: flex-start;
+  margin-left: 32px;
+  margin-top: 10px;
+  gap: 12px;
+}
+
+/* 5. Brace Map (Visually horizontal, curves are styled in SVG) */
+.tree-branch.structure-brace {
+  flex-direction: row;
+  align-items: center;
+}
+
+.tree-branch.structure-brace > .node-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.tree-branch.structure-brace > .node-row > .tree-children {
+  flex-direction: column;
+  justify-content: center;
+  gap: 28px;
+  margin-left: 80px;
+}
+
+/* 6. Timeline (Horizontal axis structure) */
+.tree-branch.node-root.structure-timeline {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.tree-branch.node-root.structure-timeline > .node-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.tree-branch.node-root.structure-timeline > .node-row > .tree-children {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-left: 80px;
+  margin-top: 0;
+  margin-right: 0;
+  gap: 120px;
+}
+
+/* Timeline milestones absolute layout positioning for alternating branches */
+.tree-branch.timeline-up {
+  position: relative;
+}
+
+.tree-branch.timeline-up > .node-row > .tree-children {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  margin-left: 24px;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  min-width: 150px;
+}
+
+.tree-branch.timeline-down {
+  position: relative;
+}
+
+.tree-branch.timeline-down > .node-row > .tree-children {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: 24px;
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  min-width: 150px;
+}
+
+/* 7. Fishbone (Causes branch diagonally) */
+.tree-branch.structure-fishbone {
+  flex-direction: row;
+  align-items: center;
+}
+
+.tree-branch.structure-fishbone > .node-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.tree-branch.structure-fishbone > .node-row > .tree-children {
+  flex-direction: column;
+  justify-content: center;
+  gap: 30px;
+  margin-left: 80px;
+}
+
+/* MindMap Node Elements */
+.node-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0; /* Prevent the node container from shrinking horizontally */
+}
+
+.node-card {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 100px;
+  max-width: 250px;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  cursor: pointer;
+  /* box-shadow removed */
+  border: 2px solid transparent;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0; /* Prevent card shrinking */
+  z-index: 3; /* Ensure cards render on top of SVG lines so overlapping lines pass behind */
+}
+
+.node-card:hover {
+  transform: translateY(-2px);
+  /* box-shadow removed */
+}
+
+.node-card-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  gap: 4px;
+}
+
+.node-card-main-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.node-text {
+  flex-grow: 1;
+}
+
+/* Priority Badge styles */
+.node-badge-priority {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 800;
+  color: #ffffff !important;
+  /* box-shadow removed */
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.node-badge-priority.priority-1 { background-color: #f43f5e !important; } /* Rose-500 */
+.node-badge-priority.priority-2 { background-color: #f97316 !important; } /* Orange-500 */
+.node-badge-priority.priority-3 { background-color: #eab308 !important; } /* Yellow-500 */
+.node-badge-priority.priority-4 { background-color: #10b981 !important; } /* Emerald-500 */
+.node-badge-priority.priority-5 { background-color: #06b6d4 !important; } /* Cyan-500 */
+.node-badge-priority.priority-6 { background-color: #3b82f6 !important; } /* Blue-500 */
+.node-badge-priority.priority-7 { background-color: #8b5cf6 !important; } /* Violet-500 */
+.node-badge-priority.priority-8 { background-color: #ec4899 !important; } /* Pink-500 */
+.node-badge-priority.priority-9 { background-color: #64748b !important; } /* Slate-500 */
+
+/* Progress Circle styles */
+.node-badge-progress {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--theme-accent-color);
+  flex-shrink: 0;
+}
+
+/* Labels Row styles */
+.node-card-labels-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.node-label-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  font-size: 9px;
+  font-weight: 600;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--theme-text-color);
+  opacity: 0.85;
+  line-height: 1.2;
+}
+
+/* Note Indicator styles */
+.node-note-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #eab308; /* Soft golden yellow */
+  margin-left: 2px;
+  cursor: pointer;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.node-note-indicator:hover {
+  transform: scale(1.2);
+  /* filter removed */
+}
+
+/* Selected state with glowing outline */
+.node-card.selected {
+  border-color: var(--theme-accent-color) !important;
+  border-width: 3px !important; /* Thick flat border for selection */
+  transform: scale(1.03);
+}
+
+/* Drop target hover state */
+.node-card.drop-hover,
+.node-card.drop-hover-child {
+  border-color: var(--theme-accent-color) !important;
+  border-style: dashed !important;
+  /* box-shadow removed */
+  transform: scale(1.06);
+}
+
+.node-card.node-shape-diamond.drop-hover,
+.node-card.node-shape-diamond.drop-hover-child {
+  border: none !important;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 100 100' preserveAspectRatio='none'%3e%3cpolygon points='50,2 98,50 50,98 2,50' fill='none' stroke='%236366f1' stroke-width='4' stroke-dasharray='6, 6'/%3e%3c/svg%3e") !important;
+}
+
+/* Disable native border when card uses custom SVG borders (dashed, dotted, or diamond shape) */
+.node-card.has-svg-border,
+.node-card.has-svg-border.selected,
+.node-card.has-svg-border.drop-hover,
+.node-card.has-svg-border.drop-hover-child {
+  border: none !important;
+}
+
+/* Sibling reordering insertion indicators */
+.node-card.drop-hover-before::before,
+.node-card.drop-hover-after::after {
+  content: '';
+  position: absolute;
+  left: -10px;
+  right: -10px;
+  height: 4px;
+  background-color: var(--theme-accent-color);
+  border-radius: 2px;
+  /* box-shadow removed */
+  animation: pulse-line 1s infinite alternate;
+  z-index: 100;
+}
+
+.node-card.drop-hover-before::before {
+  top: -16px;
+}
+
+.node-card.drop-hover-after::after {
+  bottom: -16px;
+}
+
+@keyframes pulse-line {
+  from { opacity: 0.6; }
+  to { opacity: 1; }
+}
+
+/* Collapsed indicator badge */
+.collapse-badge {
+  position: absolute;
+  right: -10px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: var(--theme-node-default-border);
+  color: var(--theme-node-default-color);
+  border: 1px solid var(--theme-glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 10;
+  transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  /* box-shadow removed */
+  opacity: 0; /* Hidden by default */
+  pointer-events: none; /* Ignore mouse hits when hidden */
+}
+
+/* Visible when hovered over the node card */
+.node-card:hover .collapse-badge {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Always visible if the node is collapsed (showing '+') so the user knows children are hidden */
+.collapse-badge.collapsed {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Collapse badge dynamic alignment based on structure direction */
+.tree-branch.layout-left > .node-row > .node-container > .node-card > .collapse-badge,
+.tree-branch.structure-logic-left > .node-row > .node-container > .node-card > .collapse-badge {
+  right: auto;
+  left: -10px;
+}
+
+.tree-branch.structure-org > .node-row > .node-container > .node-card > .collapse-badge {
+  right: auto;
+  left: 50%;
+  top: auto;
+  bottom: -10px;
+  transform: translate(-50%, 0);
+}
+
+.tree-branch.structure-tree > .node-row > .node-container > .node-card > .collapse-badge {
+  right: auto;
+  left: 10px;
+  top: auto;
+  bottom: -10px;
+  transform: none;
+}
+
+/* Hover position overrides for center alignment */
+.tree-branch.structure-org > .node-row > .node-container > .node-card:hover > .collapse-badge {
+  transform: translate(-50%, -2px) scale(1.1);
+}
+
+.tree-branch.structure-org > .node-row > .node-container > .node-card > .collapse-badge:hover {
+  transform: translate(-50%, -2px) scale(1.1);
+}
+
+.tree-branch.structure-org > .node-row > .node-container > .node-card > .collapse-badge.collapsed {
+  transform: translate(-50%, 0);
+}
+
+.collapse-badge:hover {
+  background-color: var(--theme-accent-color);
+  color: #ffffff;
+  transform: scale(1.1);
+}
+
+/* Custom Node Styles */
+.node-shape-rounded {
+  border-radius: 20px;
+}
+
+.node-shape-rectangle {
+  border-radius: 4px;
+}
+
+.node-shape-circle {
+  border-radius: 50% !important;
+  aspect-ratio: 1 / 1;
+  min-width: 80px;
+  padding: 16px !important;
+}
+
+.node-shape-diamond {
+  clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+  padding: 24px 32px !important;
+}
+
+.node-shape-underlined {
+  background-color: transparent !important;
+  border-radius: 0 !important;
+  border-bottom: 2px solid var(--node-border-color, var(--theme-node-default-border));
+  box-shadow: none !important;
+  padding-bottom: 4px;
+}
+
+.node-shape-underlined:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Inline Text Editor */
+.node-input-editor {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  width: 100%;
+  text-align: center;
+  outline: none;
+  cursor: text;
+}
+
+/* Root Node overrides for visual hierarchy */
+.node-root .node-card {
+  font-size: 18px;
+  font-weight: 700;
+  padding: 14px 26px;
+  border-radius: 12px;
+  border-color: rgba(255, 255, 255, 0.1);
+  /* box-shadow removed */
+}
+
+/* Glassmorphic Panels */
+.glass-panel {
+  background: var(--theme-glass-background);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--theme-glass-border);
+  border-radius: 12px;
+  box-shadow: var(--theme-panel-shadow);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Toolbar Floating at Top */
+.toolbar-container {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background-color: var(--theme-glass-border);
+  margin: 0 8px;
+}
+
+.toolbar-button {
+  background: transparent;
+  border: none;
+  color: var(--theme-text-color);
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.toolbar-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--theme-ui-accent-color);
+}
+
+.toolbar-button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  color: var(--theme-text-color) !important;
+}
+
+/* Toolbar Tooltip helper */
+.toolbar-button::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: -32px;
+  left: 50%;
+  transform: translateX(-50%) scale(0.85);
+  background-color: #000000;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.15s ease;
+  /* box-shadow removed */
+  z-index: 200;
+}
+
+.toolbar-button:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+/* Style Inspector Panel (Floating Right) */
+.inspector-panel {
+  position: fixed;
+  right: 24px;
+  top: 24px;
+  bottom: 24px;
+  width: 320px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.inspector-section {
+  margin-bottom: 24px;
+}
+
+.inspector-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--theme-ui-accent-color);
+  margin-bottom: 12px;
+  border-bottom: 1px dashed var(--theme-glass-border);
+  padding-bottom: 4px;
+}
+
+.inspector-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.inspector-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--theme-text-color);
+}
+
+/* Custom inputs in inspector */
+.inspector-select, .inspector-input {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--theme-glass-border);
+  color: var(--theme-text-color);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+  width: 140px;
+  transition: border-color 0.2s;
+}
+
+.inspector-select:focus, .inspector-input:focus {
+  border-color: var(--theme-ui-accent-color);
+}
+
+.inspector-select option {
+  background-color: var(--theme-glass-background);
+  color: var(--theme-text-color);
+}
+
+.color-palette {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.color-swatch {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.15s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch.active {
+  border-color: #ffffff;
+  /* box-shadow removed */
+}
+
+.color-swatch-circle {
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.color-swatch-circle:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* Shortcut Helper Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.modal-content {
+  width: 500px;
+  max-width: 90%;
+  padding: 24px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--theme-glass-border);
+  padding-bottom: 12px;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--theme-text-color);
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.modal-close:hover {
+  opacity: 1;
+}
+
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px 24px;
+  align-items: center;
+}
+
+.shortcut-key {
+  background-color: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--theme-glass-border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--theme-ui-accent-color);
+  justify-self: start;
+}
+
+.shortcut-desc {
+  font-size: 13px;
+}
+
+/* Authentication panel style */
+.auth-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-primary {
+  background-color: var(--theme-ui-accent-color);
+  color: #ffffff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--theme-glass-border);
+  color: var(--theme-text-color);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--theme-glass-border);
+}
+
+.user-email {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.db-status-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.db-status-offline {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.db-status-online {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--theme-glass-border);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--theme-ui-accent-color);
+}
+
+/* Toolbar button active state */
+.toolbar-button.active {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: var(--theme-ui-accent-color);
+  border: 1px solid var(--theme-ui-accent-color);
+}
+
+/* Outliner Mode Styles */
+.outliner-container {
+  margin: 100px auto 40px auto;
+  width: 90%;
+  max-width: 900px;
+  height: calc(100vh - 160px);
+  padding: 32px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.outliner-header {
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--theme-glass-border);
+  padding-bottom: 16px;
+}
+
+.outliner-header h2 {
+  margin: 0 0 6px 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.outliner-subtitle {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.outliner-subtitle code {
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.outliner-list-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-grow: 1;
+  padding-bottom: 40px;
+}
+
+.outliner-item {
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  padding: 6px 12px;
+  transition: background-color 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.outliner-item:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.outliner-item.selected {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.outliner-bullet-wrapper {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.outliner-bullet-root {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  /* box-shadow removed */
+}
+
+.outliner-bullet-branch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid;
+  background-color: transparent;
+}
+
+.outliner-bullet-leaf {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--theme-text-color);
+  opacity: 0.4;
+}
+
+.outliner-input {
+  flex-grow: 1;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  outline: none;
+  padding: 4px 0;
+  width: 100%;
+}
+
+.outliner-input::placeholder {
+  opacity: 0.3;
+}
+
+/* Premium Sliding Switch Component styling */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--theme-glass-border);
+  transition: .3s;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--theme-text-color);
+  transition: .3s;
+  border-radius: 50%;
+  /* box-shadow removed */
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--theme-ui-accent-color);
+  border-color: var(--theme-ui-accent-color);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+  background-color: #ffffff;
+}
+
+/* Relationship label styles */
+.relationship-label-card {
+  background-color: var(--theme-rel-label-background);
+  border: 1.5px solid var(--theme-rel-line-color);
+  color: var(--theme-rel-label-color);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: all 0.2s;
+}
+
+.relationship-label-card:hover {
+  border-color: var(--theme-rel-line-active-color);
+}
+
+.relationship-label-card.selected {
+  border-color: var(--theme-rel-line-active-color);
+  background-color: var(--theme-rel-line-active-color);
+  color: #ffffff;
+}
+
+.relationship-label-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 11px;
+  color: inherit;
+  width: 100px;
+  text-align: center;
+}
+
+@keyframes pulse-toast {
+  from {
+    transform: translateX(-50%) scale(1);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+  to {
+    transform: translateX(-50%) scale(1.02);
+    box-shadow: 0 12px 30px var(--theme-ui-accent-color);
+  }
+}
+
+/* Boundary title styling */
+.boundary-title-text {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  opacity: 0.85;
+}
+
