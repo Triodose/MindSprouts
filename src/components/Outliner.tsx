@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import type { MindMapNode } from '../types/mindmap';
+import { useI18n } from '../context/I18nContext';
 
 interface OutlinerProps {
   tree: MindMapNode;
@@ -30,6 +31,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
   indentNodeSelected,
   outdentNodeSelected
 }) => {
+  const { t } = useI18n();
   const inputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
   // Flatten the virtual-root tree recursively
@@ -129,9 +131,9 @@ export const Outliner: React.FC<OutlinerProps> = ({
   return (
     <div className="outliner-container glass-panel">
       <div className="outliner-header">
-        <h2 style={{ color: theme.accentColor }}>📝 大綱編輯模式</h2>
+        <h2 style={{ color: theme.accentColor }}>📝 {t('outlineMode')}</h2>
         <p className="outliner-subtitle">
-          支援雙向同步：<code>Enter</code> 新增項目、<code>Tab</code> 縮排、<code>Shift+Tab</code> 反縮排、<code>↑ / ↓</code> 導覽。
+          {t('outlinerGuide')}
         </p>
       </div>
 
@@ -172,7 +174,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
                 value={node.text}
                 onChange={(e) => updateNodeText(node.id, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(e, node, index)}
-                placeholder={node.depth === 0 ? "輸入主題名稱..." : "分支主題"}
+                placeholder={node.depth === 0 ? t('inputTopicName') : t('branchTopic')}
                 className="outliner-input"
                 style={{
                   color: isSelected ? theme.accentColor : 'inherit'

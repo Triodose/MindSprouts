@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import type { MindMapNode, BoundaryStyle, SummaryPosition } from '../types/mindmap';
 import { findParent } from '../utils/treeUtils';
+import { useI18n } from '../context/I18nContext';
 
 interface BoundaryDrawData {
   id: string;
@@ -57,6 +58,7 @@ const RelationshipLabelCard: React.FC<RelationshipLabelProps> = ({
   onSelect,
   onUpdateText
 }) => {
+  const { t } = useI18n();
   const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState(rel.text);
 
@@ -114,7 +116,7 @@ const RelationshipLabelCard: React.FC<RelationshipLabelProps> = ({
           onMouseDown={(e) => e.stopPropagation()}
         />
       ) : (
-        <span>{rel.text || '雙擊新增關聯文字'}</span>
+        <span>{rel.text || t('doubleClickToEditRel')}</span>
       )}
     </div>
   );

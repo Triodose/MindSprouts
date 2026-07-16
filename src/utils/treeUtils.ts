@@ -507,7 +507,16 @@ export const reorderNode = (
 };
 
 // Create a default starter tree with virtual-root
-export const createInitialTree = (): MindMapNode => {
+// Create a default starter tree with virtual-root
+export const createInitialTree = (
+  rootText = 'MindSprouts 心智圖',
+  child1Text = '雙擊以修改內容',
+  c1Sub1Text = '按 Tab 新增子節點',
+  c1Sub2Text = '按 Enter 新增兄弟節點',
+  child2Text = '使用指南 💡',
+  c2Sub1Text = '拖曳空白處以平移畫布',
+  c2Sub2Text = '滾動滑鼠以縮放比例'
+): MindMapNode => {
   const child1Id = generateId();
   const child2Id = generateId();
   
@@ -517,37 +526,37 @@ export const createInitialTree = (): MindMapNode => {
     children: [
       {
         id: 'root',
-        text: 'MindSprouts 心智圖',
+        text: rootText,
         offset: { x: 150, y: window.innerHeight / 2 - 40 }, // Default position of main topic
         children: [
           {
             id: child1Id,
-            text: '雙擊以修改內容',
+            text: child1Text,
             children: [
               {
                 id: generateId(),
-                text: '按 Tab 新增子節點',
+                text: c1Sub1Text,
                 children: []
               },
               {
                 id: generateId(),
-                text: '按 Enter 新增兄弟節點',
+                text: c1Sub2Text,
                 children: []
               }
             ]
           },
           {
             id: child2Id,
-            text: '使用指南 💡',
+            text: child2Text,
             children: [
               {
                 id: generateId(),
-                text: '拖曳空白處以平移畫布',
+                text: c2Sub1Text,
                 children: []
               },
               {
                 id: generateId(),
-                text: '滾動滑鼠以縮放比例',
+                text: c2Sub2Text,
                 children: []
               }
             ]

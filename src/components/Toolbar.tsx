@@ -3,10 +3,11 @@ import {
   Plus, GitBranch, Trash2, Undo2, Redo2, 
   ZoomIn, ZoomOut, Maximize, Download, 
   Upload, HelpCircle, FileText, Image as ImageIcon,
-  List, Map, Link2, Sun, Moon, StickyNote, Save, RefreshCw
+  List, Map, Link2, Sun, Moon, StickyNote, Save, RefreshCw, Globe
 } from 'lucide-react';
 import type { MindMapNode } from '../types/mindmap';
 import * as exportUtils from '../utils/exportUtils';
+import { useI18n, Language } from '../context/I18nContext';
 
 interface ToolbarProps {
   selectedId: string | null;
@@ -63,6 +64,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onSave,
   isConnected
 }) => {
+  const { t, language, setLanguage } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportClick = () => {
@@ -86,19 +88,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           if (treeData && typeof treeData === 'object' && treeData.id && treeData.text) {
             onImportTree(treeData);
           } else {
-            alert('無效的心智圖檔案格式！');
+            alert(t('invalidFormat'));
           }
         } else if (file.name.endsWith('.md')) {
           const parsedTree = exportUtils.parseMarkdownToTree(text);
           if (parsedTree) {
             onImportTree(parsedTree);
           } else {
-            alert('解析 Markdown 檔案失敗，請確認檔案格式是否為縮排列表！');
+            alert(t('invalidFormat'));
           }
         }
       } catch (err) {
         console.error('File parsing error:', err);
-        alert('解析檔案失敗，格式不正確。');
+        alert(t('invalidFormat'));
       }
     };
     reader.readAsText(file);
@@ -109,7 +111,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const handleExportPng = () => {
     const treeContainer = document.querySelector('.tree-container') as HTMLElement;
     if (treeContainer) {
-      exportUtils.exportToPng(treeContainer, tree.text);
+      exportUtils.exportToPng(treeContainer, tree.text, t('exportImageError'));
     }
   };
 
@@ -120,14 +122,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         <button
           className={`toolbar-button ${!isOutlinerMode ? 'active' : ''}`}
           onClick={() => onToggleOutlinerMode(false)}
-          data-tooltip="心智圖模式"
+          data-tooltip={t('mindmapMode')}
         >
           <Map size={18} />
         </button>
         <button
           className={`toolbar-button ${isOutlinerMode ? 'active' : ''}`}
           onClick={() => onToggleOutlinerMode(true)}
-          data-tooltip="大綱編輯模式"
+          data-tooltip={t('outlineMode')}
         >
           <List size={18} />
         </button>
@@ -141,7 +143,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           className="toolbar-button"
           disabled={!selectedId}
           onClick={() => selectedId && onAddChild(selectedId)}
-          data-tooltip="新增子節點 (Tab)"
+          data-tooltip={t('addChild')}
         >
           <Plus size={18} />
         </button>
@@ -149,7 +151,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           className="toolbar-button"
           disabled={!selectedId || selectedId === 'root'}
           onClick={() => selectedId && onAddSibling(selectedId)}
-          data-tooltip="新增兄弟節點 (Enter)"
+          data-tooltip={t('addSibling')}
         >
           <GitBranch size={18} />
         </button>
@@ -157,7 +159,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           className="toolbar-button"
           disabled={!selectedId || selectedId === 'root'}
           onClick={() => selectedId && onDeleteSelected(selectedId)}
-          data-tooltip="刪除節點 (Del)"
+          data-tooltip={t('deleteNode')}
         >
           <Trash2 size={18} />
         </button>
@@ -165,7 +167,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <button
             className="toolbar-button active"
             onClick={() => onCancelConnection?.()}
-            data-tooltip="取消建立關聯線"
+            data-tooltip={t('cancelConnection')}
           >
             <Link2 size={18} style={{ transform: 'rotate(-45deg)' }} />
           </button>
@@ -174,7 +176,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             className="toolbar-button"
             disabled={!selectedId}
             onClick={() => selectedId && onStartConnection?.(selectedId)}
-            data-tooltip="建立關聯線 🔗"
+            data-tooltip={t('connectNodes')}
           >
             <Link2 size={18} />
           </button>
@@ -183,7 +185,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           className="toolbar-button toolbar-note-btn"
           disabled={!selectedId}
           onClick={onAddNoteClick}
-          data-tooltip="編輯備註 📝"
+          data-tooltip={t('editNote')}
         >
           <StickyNote size={18} />
         </button>
@@ -197,7 +199,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           className="toolbar-button"
           disabled={!canUndo}
           onClick={onUndo}
-          data-tooltip="復原 (Ctrl+Z)"
+          data-tooltip={t('undo')}
         >
           <Undo2 size={18} />
         </button>
@@ -205,7 +207,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           className="toolbar-button"
           disabled={!canRedo}
           onClick={onRedo}
-          data-tooltip="重做 (Ctrl+Y)"
+          data-tooltip={t('redo')}
         >
           <Redo2 size={18} />
         </button>
@@ -219,7 +221,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           className="toolbar-button"
           onClick={onZoomIn}
           disabled={isOutlinerMode}
-          data-tooltip={isOutlinerMode ? "心智圖模式下可用" : "放大"}
+          data-tooltip={isOutlinerMode ? t('mindmapModeOnly') : t('zoomIn')}
         >
           <ZoomIn size={18} />
         </button>
@@ -227,7 +229,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           className="toolbar-button"
           onClick={onZoomOut}
           disabled={isOutlinerMode}
-          data-tooltip={isOutlinerMode ? "心智圖模式下可用" : "縮小"}
+          data-tooltip={isOutlinerMode ? t('mindmapModeOnly') : t('zoomOut')}
         >
           <ZoomOut size={18} />
         </button>
@@ -235,7 +237,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           className="toolbar-button"
           onClick={onCenterCanvas}
           disabled={isOutlinerMode}
-          data-tooltip={isOutlinerMode ? "心智圖模式下可用" : "置中畫布"}
+          data-tooltip={isOutlinerMode ? t('mindmapModeOnly') : t('centerCanvas')}
         >
           <Maximize size={18} />
         </button>
@@ -251,14 +253,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           disabled={!isConnected || syncStatus === 'syncing'}
           data-tooltip={
             !isConnected
-              ? "本地儲存模式 (自動儲存) 💾"
+              ? t('saveTooltipLocal')
               : syncStatus === 'dirty'
-              ? "有未同步的變更，點擊儲存並同步至雲端硬碟 💾"
+              ? t('saveTooltipDirty')
               : syncStatus === 'syncing'
-              ? "雲端同步中... ⏳"
+              ? t('saveTooltipSyncing')
               : syncStatus === 'error'
-              ? "同步失敗，點擊重試 ❌"
-              : "已同步至雲端硬碟 🟢"
+              ? t('saveTooltipError')
+              : t('saveTooltipSaved')
           }
         >
           {syncStatus === 'syncing' ? (
@@ -288,21 +290,21 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         <button
           className="toolbar-button"
           onClick={handleImportClick}
-          data-tooltip="匯入 (JSON / Markdown)"
+          data-tooltip={t('importFile')}
         >
           <Download size={18} />
         </button>
         <button
           className="toolbar-button"
           onClick={() => exportUtils.exportToJson(tree, tree.text)}
-          data-tooltip="匯出 JSON"
+          data-tooltip={t('exportJson')}
         >
           <Upload size={18} />
         </button>
         <button
           className="toolbar-button"
           onClick={() => exportUtils.exportToMarkdown(tree, tree.text)}
-          data-tooltip="匯出 Markdown"
+          data-tooltip={t('exportMarkdown')}
         >
           <FileText size={18} />
         </button>
@@ -310,7 +312,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           className="toolbar-button"
           onClick={handleExportPng}
           disabled={isOutlinerMode}
-          data-tooltip={isOutlinerMode ? "心智圖模式下可用" : "匯出圖片 (PNG)"}
+          data-tooltip={isOutlinerMode ? t('mindmapModeOnly') : t('exportPng')}
         >
           <ImageIcon size={18} />
         </button>
@@ -323,10 +325,37 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         <button
           className="toolbar-button"
           onClick={onToggleUiTheme}
-          data-tooltip={uiTheme === 'light' ? '切換為深色介面' : '切換為淺色介面'}
+          data-tooltip={uiTheme === 'light' ? t('themeLight') : t('themeDark')}
         >
           {uiTheme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
         </button>
+      </div>
+
+      <div className="toolbar-divider" />
+
+      {/* Language Selector */}
+      <div className="toolbar-group" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <Globe size={18} style={{ opacity: 0.8 }} />
+        <select
+          value={language}
+          onChange={(e) => setLanguage(e.target.value as Language)}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--theme-text-color)',
+            fontSize: '13px',
+            fontWeight: 500,
+            outline: 'none',
+            cursor: 'pointer',
+            padding: '4px 2px',
+            borderRadius: '4px'
+          }}
+          title={t('selectLanguage')}
+        >
+          <option value="zh" style={{ background: 'var(--theme-bg-color)', color: 'var(--theme-text-color)' }}>{t('langZh')}</option>
+          <option value="en" style={{ background: 'var(--theme-bg-color)', color: 'var(--theme-text-color)' }}>{t('langEn')}</option>
+          <option value="ja" style={{ background: 'var(--theme-bg-color)', color: 'var(--theme-text-color)' }}>{t('langJa')}</option>
+        </select>
       </div>
 
       <div className="toolbar-divider" />
@@ -336,7 +365,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         <button
           className="toolbar-button"
           onClick={onOpenShortcuts}
-          data-tooltip="快速鍵說明"
+          data-tooltip={t('shortcutsHelp')}
         >
           <HelpCircle size={18} />
         </button>

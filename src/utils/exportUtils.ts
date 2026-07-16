@@ -98,7 +98,7 @@ export const parseMarkdownToTree = (markdownText: string): MindMapNode | null =>
 };
 
 // Export canvas layout as PNG image
-export const exportToPng = async (element: HTMLElement, title: string) => {
+export const exportToPng = async (element: HTMLElement, title: string, errorPrefix = '匯出圖片時發生錯誤：') => {
   console.log('exportToPng called with element:', element, 'title:', title);
   try {
     const realApp = element.closest('.mindmap-app') as HTMLElement;
@@ -236,7 +236,7 @@ export const exportToPng = async (element: HTMLElement, title: string) => {
     triggerDownload(canvas, title);
   } catch (err) {
     console.error('Failed to export image:', err);
-    alert('匯出圖片時發生錯誤：' + (err as Error).message);
+    alert(errorPrefix + (err as Error).message);
   }
 };
 

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import type { MindMapMetadata } from '../hooks/useMindMap';
 import LogoImage from '../assets/mindsprout_logo_with_text.png';
+import { useI18n } from '../context/I18nContext';
 
 interface MapListSidebarProps {
   mapsList: MindMapMetadata[];
@@ -25,6 +26,7 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
   onRenameMap,
   onReorderMaps
 }) => {
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(true);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -81,7 +83,7 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
 
   const handleDeleteClick = (e: React.MouseEvent, id: string, title: string) => {
     e.stopPropagation();
-    if (window.confirm(`確認要刪除心智圖「${title}」嗎？`)) {
+    if (window.confirm(t('deleteConfirm') + ' (' + title + ')')) {
       onDeleteMap(id);
     }
   };
@@ -193,13 +195,13 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
           }}
         >
           <Folder size={16} />
-          <span>我的心智圖</span>
+          <span>{t('myMindMaps')}</span>
         </div>
 
         {/* Create New Map Button */}
         <button
           className="btn-primary"
-          onClick={() => onCreateNewMap('未命名心智圖')}
+          onClick={() => onCreateNewMap(t('untitledMap'))}
           style={{
             width: '100%',
             marginBottom: '16px',
@@ -208,7 +210,7 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
           }}
         >
           <Plus size={16} />
-          <span>建立新心智圖</span>
+          <span>{t('newMap')}</span>
         </button>
 
         {/* Maps List Container */}
@@ -341,7 +343,7 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
                           padding: '2px'
                         }}
                         className="hover-action-btn"
-                        title="重命名"
+                        title={t('renameMap')}
                       >
                         <Edit2 size={12} />
                       </button>
@@ -356,7 +358,7 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
                           padding: '2px'
                         }}
                         className="hover-action-btn"
-                        title="刪除"
+                        title={t('deleteMap')}
                       >
                         <Trash2 size={12} />
                       </button>

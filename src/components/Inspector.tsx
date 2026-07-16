@@ -3,6 +3,7 @@ import type { MindMapNode, MindMapTheme } from '../types/mindmap';
 import { THEMES } from '../utils/themes';
 import { LogIn, LogOut, Cloud, CloudOff, RefreshCw, Flag, Star, Heart, HelpCircle, Info, Clock, AlertCircle } from 'lucide-react';
 import { findParent } from '../utils/treeUtils';
+import { useI18n } from '../context/I18nContext';
 
 interface InspectorProps {
   selectedId: string | null;
@@ -28,12 +29,12 @@ interface InspectorProps {
 
 
 const PRES_BOUNDARY_COLORS = [
-  { name: '靛藍 (Indigo)', fill: 'rgba(99, 102, 241, 0.05)', border: '#6366f1' },
-  { name: '玫瑰紅 (Rose)', fill: 'rgba(244, 63, 94, 0.05)', border: '#f43f5e' },
-  { name: '翡翠綠 (Emerald)', fill: 'rgba(16, 185, 129, 0.05)', border: '#10b981' },
-  { name: '琥珀黃 (Amber)', fill: 'rgba(245, 158, 11, 0.05)', border: '#f59e0b' },
-  { name: '紫羅蘭 (Violet)', fill: 'rgba(139, 92, 246, 0.05)', border: '#8b5cf6' },
-  { name: '石板灰 (Slate)', fill: 'rgba(148, 163, 184, 0.06)', border: '#94a3b8' }
+  { key: 'colorIndigo', fill: 'rgba(99, 102, 241, 0.05)', border: '#6366f1' },
+  { key: 'colorRose', fill: 'rgba(244, 63, 94, 0.05)', border: '#f43f5e' },
+  { key: 'colorEmerald', fill: 'rgba(16, 185, 129, 0.05)', border: '#10b981' },
+  { key: 'colorAmber', fill: 'rgba(245, 158, 11, 0.05)', border: '#f59e0b' },
+  { key: 'colorViolet', fill: 'rgba(139, 92, 246, 0.05)', border: '#8b5cf6' },
+  { key: 'colorSlate', fill: 'rgba(148, 163, 184, 0.06)', border: '#94a3b8' }
 ];
 
 const GRID_PRESET_COLORS = [
@@ -99,6 +100,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   onUpdateSummaryRange,
   onDeleteSummary
 }) => {
+  const { t } = useI18n();
   const rootNode = tree.children.find((c) => c.id === 'root');
   const isTimelineMode = rootNode?.style?.structure === 'timeline';
 
@@ -172,14 +174,14 @@ export const Inspector: React.FC<InspectorProps> = ({
 
   const getStructureName = (structureKey: string): string => {
     const names: Record<string, string> = {
-      'logic': '右側邏輯圖',
-      'logic-left': '左側邏輯圖',
-      'mindmap': '心智圖',
-      'org': '組織結構圖',
-      'tree': '樹狀圖',
-      'brace': '括號圖',
-      'timeline': '時間軸',
-      'fishbone': '魚骨圖'
+      'logic': t('structureLogicRight'),
+      'logic-left': t('structureLogicLeft'),
+      'mindmap': t('structureMindmap'),
+      'org': t('structureOrg'),
+      'tree': t('structureTree'),
+      'brace': t('structureBrace'),
+      'timeline': t('structureTimeline'),
+      'fishbone': t('structureFishbone')
     };
     return names[structureKey] || structureKey;
   };
@@ -305,7 +307,7 @@ export const Inspector: React.FC<InspectorProps> = ({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <span style={{ fontSize: '11px', fontWeight: 600, opacity: 0.8 }}>主題配色</span>
+        <span style={{ fontSize: '11px', fontWeight: 600, opacity: 0.8 }}>{t('themeSelect')}</span>
         <div 
           style={{ 
             display: 'grid', 
@@ -339,7 +341,7 @@ export const Inspector: React.FC<InspectorProps> = ({
         <div style={{ borderTop: '1px dashed var(--theme-glass-border)', margin: '4px 0' }} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <span style={{ fontSize: '11px', fontWeight: 600, opacity: 0.8 }}>自訂顏色</span>
+          <span style={{ fontSize: '11px', fontWeight: 600, opacity: 0.8 }}>{t('customColor')}</span>
           <div 
             style={{ 
               display: 'grid', 
@@ -441,7 +443,7 @@ export const Inspector: React.FC<InspectorProps> = ({
               }}
               onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.15)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; }}
-              title="開啓進階自訂選色器"
+              title={t("customColorPicker")}
             />
           </div>
         </div>
@@ -465,7 +467,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                 fontWeight: 600
               }}
             >
-              恢復預設
+              {t('restoreDefault')}
             </button>
             <button
               onClick={() => {
@@ -484,7 +486,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                 fontWeight: 600
               }}
             >
-              設為透明
+              {t('setTransparent')}
             </button>
           </div>
         )}
@@ -526,10 +528,10 @@ export const Inspector: React.FC<InspectorProps> = ({
       )}
       {/* 1. Workspace Theme */}
       <div className="inspector-section">
-        <div className="inspector-title">心智圖配置</div>
+        <div className="inspector-title">{t('mindmapConfig')}</div>
         
         <div className="inspector-row">
-          <span className="inspector-label">主題配色</span>
+          <span className="inspector-label">{t('themeSelect')}</span>
           <select
             className="inspector-select"
             value={theme.id}
@@ -538,34 +540,36 @@ export const Inspector: React.FC<InspectorProps> = ({
               if (selected) onChangeTheme(selected);
             }}
           >
-            {THEMES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
+            {THEMES.map((themeItem) => (
+              <option key={themeItem.id} value={themeItem.id}>
+                {t('theme_' + themeItem.id.split('-')[0]) !== 'theme_' + themeItem.id.split('-')[0]
+                  ? t('theme_' + themeItem.id.split('-')[0])
+                  : themeItem.name}
               </option>
             ))}
           </select>
         </div>
 
         <div className="inspector-row" style={{ marginTop: '8px' }}>
-          <span className="inspector-label">地圖排版結構</span>
+          <span className="inspector-label">{t('mapLayout')}</span>
           <select
             className="inspector-select"
             value={tree.children.find((c) => c.id === 'root')?.style?.structure || 'logic'}
             onChange={(e) => onUpdateStyle('root', { structure: e.target.value as any })}
           >
-            <option value="mindmap">經典心智圖 (Mind Map)</option>
-            <option value="logic">右側邏輯圖 (Logic Right)</option>
-            <option value="logic-left">左側邏輯圖 (Logic Left)</option>
-            <option value="org">組織結構圖 (Org Chart)</option>
-            <option value="tree">樹狀圖 (Tree Chart)</option>
-            <option value="brace">括號圖 (Brace Map)</option>
-            <option value="timeline">時間軸 (Timeline)</option>
-            <option value="fishbone">魚骨圖 (Fishbone)</option>
+            <option value="mindmap">{t('structureMindmap')} (Mind Map)</option>
+            <option value="logic">{t('structureLogicRight')} (Logic Right)</option>
+            <option value="logic-left">{t('structureLogicLeft')} (Logic Left)</option>
+            <option value="org">{t('structureOrg')} (Org Chart)</option>
+            <option value="tree">{t('structureTree')} (Tree Chart)</option>
+            <option value="brace">{t('structureBrace')} (Brace Map)</option>
+            <option value="timeline">{t('structureTimeline')} (Timeline)</option>
+            <option value="fishbone">{t('structureFishbone')} (Fishbone)</option>
           </select>
         </div>
 
         <div className="inspector-row" style={{ marginTop: '8px' }}>
-          <span className="inspector-label">自動排列對齊</span>
+          <span className="inspector-label">{t('autoLayout')}</span>
           <label className="toggle-switch">
             <input
               type="checkbox"
@@ -579,53 +583,53 @@ export const Inspector: React.FC<InspectorProps> = ({
 
       {/* 2. Selected Node Styles */}
       <div className="inspector-section" style={{ flexGrow: 1 }}>
-        <div className="inspector-title">節點樣式設定</div>
+        <div className="inspector-title">{t('nodeStyleSettings')}</div>
         {selectedNode ? (
           <>
             <div className="inspector-row">
-              <span className="inspector-label">外觀形狀</span>
+              <span className="inspector-label">{t('shape')}</span>
               <select
                 className="inspector-select"
                 value={currentShape}
                 onChange={handleShapeChange}
               >
-                <option value="rounded">圓角框 (Rounded)</option>
-                <option value="rectangle">直角框 (Rectangle)</option>
-                <option value="underlined">下底線 (Underline)</option>
-                <option value="diamond">菱形 (Diamond)</option>
-                <option value="circle">圓形 (Circle)</option>
+                <option value="rounded">{t('shapeRoundedRect')} (Rounded)</option>
+                <option value="rectangle">{t('shapeRect')} (Rectangle)</option>
+                <option value="underlined">{t('shapeUnderline')} (Underline)</option>
+                <option value="diamond">{t('shapeDiamond')} (Diamond)</option>
+                <option value="circle">{t('shapeCircle')} (Circle)</option>
               </select>
             </div>
 
             <div className="inspector-row">
-              <span className="inspector-label">外框線條</span>
+              <span className="inspector-label">{t('borderLineStyle')}</span>
               <select
                 className="inspector-select"
                 value={currentBorderStyle}
                 onChange={handleBorderStyleChange}
               >
-                <option value="solid">實線 (Solid)</option>
-                <option value="dashed">短虛線 (Dashed)</option>
-                <option value="long-dashed">長虛線 (Long Dashed)</option>
-                <option value="dotted">點線 (Dotted)</option>
+                <option value="solid">{t('borderLineStyleSolid')} (Solid)</option>
+                <option value="dashed">{t('borderLineStyleDashed')} (Dashed)</option>
+                <option value="long-dashed">{t('borderLineStyleLongDashed')} (Long Dashed)</option>
+                <option value="dotted">{t('borderLineStyleDotted')} (Dotted)</option>
               </select>
             </div>
 
             <div className="inspector-row">
-              <span className="inspector-label">分枝線條</span>
+              <span className="inspector-label">{t('branchLineStyle')}</span>
               <select
                 className="inspector-select"
                 value={currentLineStyle}
                 onChange={handleLineStyleChange}
               >
-                <option value="curve">曲線 (Curve)</option>
-                <option value="straight">直線 (Straight)</option>
-                <option value="tapered">漸細線 (Tapered)</option>
+                <option value="curve">{t('branchLineStyleCurve')} (Curve)</option>
+                <option value="straight">{t('branchLineStyleStraight')} (Straight)</option>
+                <option value="tapered">{t('branchLineStyleTapered')} (Tapered)</option>
               </select>
             </div>
 
             <div className="inspector-row" style={{ position: 'relative' }}>
-              <span className="inspector-label">外框顏色</span>
+              <span className="inspector-label">{t('borderColor')}</span>
               <div 
                 className="inspector-select" 
                 style={{ 
@@ -661,7 +665,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                       }} />
                     )}
                   </div>
-                  <span style={{ fontSize: '12px' }}>{currentBorderColor || '預設'}</span>
+                  <span style={{ fontSize: '12px' }}>{currentBorderColor || t('default')}</span>
                 </div>
                 <span style={{ fontSize: '10px', opacity: 0.6 }}>▼</span>
               </div>
@@ -670,59 +674,59 @@ export const Inspector: React.FC<InspectorProps> = ({
 
             {!isTimelineMode && selectedId !== 'root' && (
               <div className="inspector-row">
-                <span className="inspector-label">分支結構</span>
+                <span className="inspector-label">{t('branchStructure')}</span>
                 <select
                   className="inspector-select"
                   value={currentStructure}
                   onChange={handleStructureChange}
                 >
                   {selectedId && selectedId !== 'root' && (
-                    <option value="">繼承父節點 (當前: {getStructureName(getInheritedStructure(selectedId))})</option>
+                    <option value="">{t('inheritParent')} ({t('default')}: {getStructureName(getInheritedStructure(selectedId))})</option>
                   )}
                   {selectedNodeSide === 'left' ? (
-                    <option value="logic-left">左側邏輯圖 (Logic Left)</option>
+                    <option value="logic-left">{t('structureLogicLeft')} (Logic Left)</option>
                   ) : (
-                    <option value="logic">右側邏輯圖 (Logic Right)</option>
+                    <option value="logic">{t('structureLogicRight')} (Logic Right)</option>
                   )}
-                  <option value="org">組織結構圖 (Org Chart)</option>
-                  <option value="tree">樹狀圖 (Tree Chart)</option>
-                  <option value="brace">括號圖 (Brace Map)</option>
-                  <option value="timeline">時間軸 (Timeline)</option>
-                  <option value="fishbone">魚骨圖 (Fishbone)</option>
+                  <option value="org">{t('structureOrg')} (Org Chart)</option>
+                  <option value="tree">{t('structureTree')} (Tree Chart)</option>
+                  <option value="brace">{t('structureBrace')} (Brace Map)</option>
+                  <option value="timeline">{t('structureTimeline')} (Timeline)</option>
+                  <option value="fishbone">{t('structureFishbone')} (Fishbone)</option>
                 </select>
               </div>
             )}
 
             <div className="inspector-row">
-              <span className="inspector-label">文字大小</span>
+              <span className="inspector-label">{t('fontSize')}</span>
               <select
                 className="inspector-select"
                 value={currentFontSize}
                 onChange={handleFontSizeChange}
               >
-                <option value="12px">小 (12px)</option>
-                <option value="14px">中 (14px)</option>
-                <option value="16px">大 (16px)</option>
-                <option value="18px">特大 (18px)</option>
-                <option value="22px">超大 (22px)</option>
+                <option value="12px">{t('fontSmall')} (12px)</option>
+                <option value="14px">{t('fontMedium')} (14px)</option>
+                <option value="16px">{t('fontLarge')} (16px)</option>
+                <option value="18px">{t('fontXLarge')} (18px)</option>
+                <option value="22px">{t('fontXXLarge')} (22px)</option>
               </select>
             </div>
 
             <div className="inspector-row">
-              <span className="inspector-label">文字粗細</span>
+              <span className="inspector-label">{t('fontWeight')}</span>
               <select
                 className="inspector-select"
                 value={currentFontWeight}
                 onChange={handleFontWeightChange}
               >
-                <option value="300">細 (Light)</option>
-                <option value="500">中 (Regular)</option>
-                <option value="700">粗 (Bold)</option>
+                <option value="300">{t('weightLight')} (Light)</option>
+                <option value="500">{t('weightRegular')} (Regular)</option>
+                <option value="700">{t('weightBold')} (Bold)</option>
               </select>
             </div>
 
             <div className="inspector-row" style={{ position: 'relative' }}>
-              <span className="inspector-label">文字顏色</span>
+              <span className="inspector-label">{t('textColor')}</span>
               <div 
                 className="inspector-select" 
                 style={{ 
@@ -745,7 +749,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                       border: '1px solid var(--theme-glass-border)'
                     }} 
                   />
-                  <span style={{ fontSize: '12px' }}>{currentColor || '預設'}</span>
+                  <span style={{ fontSize: '12px' }}>{currentColor || t('default')}</span>
                 </div>
                 <span style={{ fontSize: '10px', opacity: 0.6 }}>▼</span>
               </div>
@@ -754,7 +758,7 @@ export const Inspector: React.FC<InspectorProps> = ({
 
             {currentShape !== 'underlined' && (
               <div className="inspector-row" style={{ position: 'relative' }}>
-                <span className="inspector-label">背景填滿</span>
+                <span className="inspector-label">{t('fillColor')}</span>
                 <div 
                   className="inspector-select" 
                   style={{ 
@@ -791,7 +795,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                       )}
                     </div>
                     <span style={{ fontSize: '12px' }}>
-                      {currentBg === 'transparent' ? '透明' : currentBg ? currentBg : '預設'}
+                      {currentBg === 'transparent' ? t('setTransparent') : currentBg ? currentBg : t('default')}
                     </span>
                   </div>
                   <span style={{ fontSize: '10px', opacity: 0.6 }}>▼</span>
@@ -837,17 +841,17 @@ export const Inspector: React.FC<InspectorProps> = ({
                   onApplyStyleToLevel(selectedId, styleToCopy);
                 }}
               >
-                套用至同階層節點
+                {t('applyLevel')}
               </button>
             </div>
 
             {/* Badges, Labels, Notes Section */}
             <div className="inspector-divider" style={{ margin: '20px 0 16px', borderTop: '1px dashed var(--theme-glass-border)' }} />
             
-            <div className="inspector-title" style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.8 }}>節點標記與備註</div>
+            <div className="inspector-title" style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.8 }}>{t('nodeNotesTitle')}</div>
             
             <div className="inspector-row-vertical">
-              <span className="inspector-label">優先級</span>
+              <span className="inspector-label">{t('priority')}</span>
               <div className="priority-grid">
                 {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((p) => (
                   <button
@@ -864,7 +868,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                   type="button"
                   className="priority-clear-btn"
                   onClick={() => onUpdateData(selectedNode.id, { priority: undefined })}
-                  title="清除優先級"
+                  title={t("clearPriority")}
                 >
                   ✕
                 </button>
@@ -872,7 +876,7 @@ export const Inspector: React.FC<InspectorProps> = ({
             </div>
 
             <div className="inspector-row-vertical" style={{ marginTop: '14px' }}>
-              <span className="inspector-label">任務進度</span>
+              <span className="inspector-label">{t('taskProgress')}</span>
               <div className="progress-grid">
                 {[0, 25, 50, 75, 100].map((progressValue) => (
                   <button
@@ -892,7 +896,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                   type="button"
                   className="progress-clear-btn"
                   onClick={() => onUpdateData(selectedNode.id, { progress: undefined })}
-                  title="清除進度"
+                  title={t("clearProgress")}
                 >
                   ✕
                 </button>
@@ -900,20 +904,20 @@ export const Inspector: React.FC<InspectorProps> = ({
             </div>
 
             <div className="inspector-row-vertical" style={{ marginTop: '14px' }}>
-              <span className="inspector-label">標記與旗幟</span>
+              <span className="inspector-label">{t('markersAndFlags')}</span>
               <div className="flag-picker-grid">
                 {['red-flag', 'orange-flag', 'yellow-flag', 'green-flag', 'blue-flag', 'purple-flag', 'star', 'heart', 'question', 'info'].map((flagKey) => {
                   const flagTitleMap: Record<string, string> = {
-                    'red-flag': '紅旗',
-                    'orange-flag': '橘旗',
-                    'yellow-flag': '黃旗',
-                    'green-flag': '綠旗',
-                    'blue-flag': '藍旗',
-                    'purple-flag': '紫旗',
-                    'star': '重要星星',
-                    'heart': '喜愛心形',
-                    'question': '待確認問號',
-                    'info': '提示資訊'
+                    'red-flag': t('flagRed'),
+                    'orange-flag': t('flagOrange'),
+                    'yellow-flag': t('flagYellow'),
+                    'green-flag': t('flagGreen'),
+                    'blue-flag': t('flagBlue'),
+                    'purple-flag': t('flagPurple'),
+                    'star': t('flagStar'),
+                    'heart': t('flagHeart'),
+                    'question': t('flagQuestion'),
+                    'info': t('flagInfo')
                   };
                   const renderFlagIconHelper = (key: string) => {
                     const size = 14;
@@ -953,11 +957,11 @@ export const Inspector: React.FC<InspectorProps> = ({
             </div>
 
             <div className="inspector-row">
-              <span className="inspector-label">自訂標籤</span>
+              <span className="inspector-label">{t('customTags')}</span>
               <input
                 type="text"
                 className="inspector-input"
-                placeholder="以逗號分隔，例如: 重要, 待辦"
+                placeholder={t("tagsPlaceholder")}
                 value={selectedNode.labels ? selectedNode.labels.join(', ') : ''}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -981,14 +985,14 @@ export const Inspector: React.FC<InspectorProps> = ({
 
             <div className="inspector-divider" style={{ margin: '20px 0 16px', borderTop: '1px dashed var(--theme-glass-border)' }} />
             
-            <div className="inspector-title" style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.8 }}>超連結與多媒體</div>
+            <div className="inspector-title" style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.8 }}>{t('hyperlinkMedia')}</div>
 
             <div className="inspector-row-vertical" style={{ marginTop: '10px' }}>
-              <span className="inspector-label">超連結網址 (URL)</span>
+              <span className="inspector-label">{t('hyperlink')}</span>
               <input
                 className="inspector-input"
                 type="text"
-                placeholder="例如: google.com"
+                placeholder={t("linkPlaceholder")}
                 value={selectedNode.link || ''}
                 onChange={(e) => onUpdateData(selectedNode.id, { link: e.target.value || undefined })}
                 style={{
@@ -1006,11 +1010,11 @@ export const Inspector: React.FC<InspectorProps> = ({
             </div>
 
             <div className="inspector-row-vertical" style={{ marginTop: '12px' }}>
-              <span className="inspector-label">內嵌圖片網址 (Image URL)</span>
+              <span className="inspector-label">{t('embeddedImage')}</span>
               <input
                 className="inspector-input"
                 type="text"
-                placeholder="貼上圖片網址以內嵌預覽"
+                placeholder={t("imagePlaceholder")}
                 value={selectedNode.image || ''}
                 onChange={(e) => onUpdateData(selectedNode.id, { image: e.target.value || undefined })}
                 style={{
@@ -1038,7 +1042,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                   marginBottom: '10px'
                 }}
               >
-                <span className="inspector-title" style={{ margin: 0 }}>節點外框 (Boundary)</span>
+                <span className="inspector-title" style={{ margin: 0 }}>{t('boundaryTitle')}</span>
                 <input
                   type="checkbox"
                   checked={!!selectedNode.boundary}
@@ -1047,7 +1051,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                     if (active) {
                       onUpdateData(selectedNode.id, {
                         boundary: {
-                          title: '外框名稱',
+                          title: t('boundaryName'),
                           fillColor: 'rgba(99, 102, 241, 0.05)',
                           borderColor: '#6366f1',
                           borderStyle: 'dashed'
@@ -1064,7 +1068,7 @@ export const Inspector: React.FC<InspectorProps> = ({
               {selectedNode.boundary && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingLeft: '4px' }}>
                   <div className="inspector-row">
-                    <span className="inspector-label">外框標題</span>
+                    <span className="inspector-label">{t('boundaryTitleLabel')}</span>
                     <input
                       type="text"
                       className="inspector-input"
@@ -1091,7 +1095,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                   </div>
 
                   <div className="inspector-row">
-                    <span className="inspector-label">邊框樣式</span>
+                    <span className="inspector-label">{t('boundaryBorderStyle')}</span>
                     <select
                       className="inspector-select"
                       value={selectedNode.boundary.borderStyle || 'dashed'}
@@ -1104,19 +1108,19 @@ export const Inspector: React.FC<InspectorProps> = ({
                         });
                       }}
                     >
-                      <option value="solid">實線 (Solid)</option>
-                      <option value="dashed">虛線 (Dashed)</option>
+                      <option value="solid">{t('borderLineStyleSolid')} (Solid)</option>
+                      <option value="dashed">{t('borderLineStyleDashed')} (Dashed)</option>
                     </select>
                   </div>
 
                   <div style={{ marginTop: '4px' }}>
-                    <span className="inspector-label" style={{ display: 'block', marginBottom: '8px' }}>外框配色選擇</span>
+                    <span className="inspector-label" style={{ display: 'block', marginBottom: '8px' }}>{t('boundaryColorSelect')}</span>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                       {PRES_BOUNDARY_COLORS.map((item) => {
                         const isCurrent = selectedNode.boundary?.borderColor === item.border;
                         return (
                           <button
-                            key={item.name}
+                            key={item.key}
                             onClick={() => {
                               onUpdateData(selectedNode.id, {
                                 boundary: {
@@ -1140,7 +1144,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                               transform: isCurrent ? 'scale(1.05)' : 'none'
                             }}
                           >
-                            {item.name.split(' ')[0]}
+                            {t(item.key)}
                           </button>
                         );
                       })}
@@ -1160,7 +1164,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                     // For regular sub-nodes (excluding root)
                     selectedId !== 'root' && (
                       <div className="inspector-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span className="inspector-title" style={{ margin: 0 }}>節點概要 (Summary)</span>
+                        <span className="inspector-title" style={{ margin: 0 }}>{t('summaryTitle')}</span>
                         <button
                           className="inspector-button-primary"
                           onClick={() => onAddSummary?.(selectedId, selectedId)}
@@ -1175,7 +1179,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                             fontWeight: 600
                           }}
                         >
-                          新增概要
+                          {t('addSummary')}
                         </button>
                       </div>
                     )
@@ -1188,10 +1192,10 @@ export const Inspector: React.FC<InspectorProps> = ({
                       
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                          <div className="inspector-title" style={{ margin: 0 }}>節點概要範圍設定</div>
+                          <div className="inspector-title" style={{ margin: 0 }}>{t('summaryRangeSettings')}</div>
                           
                           <div className="inspector-row">
-                            <span className="inspector-label">起始節點</span>
+                            <span className="inspector-label">{t('startNode')}</span>
                             <select
                               className="inspector-select"
                               value={summaryNode.startNodeId || ''}
@@ -1204,7 +1208,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                           </div>
 
                           <div className="inspector-row">
-                            <span className="inspector-label">結束節點</span>
+                            <span className="inspector-label">{t('endNode')}</span>
                             <select
                               className="inspector-select"
                               value={summaryNode.endNodeId || ''}
@@ -1233,7 +1237,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                                 textAlign: 'center'
                               }}
                             >
-                              刪除此概要
+                              {t('deleteSummary')}
                             </button>
                           </div>
                         </div>
@@ -1246,18 +1250,18 @@ export const Inspector: React.FC<InspectorProps> = ({
           </>
         ) : (
           <div style={{ fontSize: '13px', opacity: 0.5, textAlign: 'center', marginTop: '20px' }}>
-            請點選畫布上的任何節點以進行自訂編輯。
+            {t('selectNodePrompt')}
           </div>
         )}
       </div>
 
       {/* 3. Google Drive Auth Integration */}
       <div className="inspector-section" style={{ borderTop: '1px solid var(--theme-glass-border)', paddingTop: '20px', marginBottom: 0 }}>
-        <div className="inspector-title">雲端同步狀態</div>
+        <div className="inspector-title">{t('syncStatusTitle')}</div>
         <div className="auth-panel">
           {!isGoogleDriveConfigured ? (
             <div className="db-status-pill db-status-offline" style={{ alignSelf: 'start', marginBottom: '8px' }}>
-              <CloudOff size={14} /> 本地儲存模式 (未設定 Google API)
+              <CloudOff size={14} /> {t('syncStatusLocal')}
             </div>
           ) : user ? (
             <>
@@ -1275,38 +1279,38 @@ export const Inspector: React.FC<InspectorProps> = ({
                 {syncStatus === 'syncing' && (
                   <div className="db-status-pill" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>
                     <RefreshCw size={12} className="spin" style={{ animation: 'spin 1.5s linear infinite' }} />
-                    同步中...
+                    {t('syncStatusSyncing')}
                   </div>
                 )}
                 {syncStatus === 'dirty' && (
                   <div className="db-status-pill" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
                     <Clock size={12} />
-                    有未儲存的變更
+                    {t('syncStatusDirty')}
                   </div>
                 )}
                 {syncStatus === 'error' && (
                   <div className="db-status-pill" style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
                     <AlertCircle size={12} />
-                    同步失敗
+                    {t('syncStatusError')}
                   </div>
                 )}
                 {syncStatus === 'saved' && (
                   <div className="db-status-pill db-status-online">
-                    <Cloud size={14} /> 已連線至雲端硬碟
+                    <Cloud size={14} /> {t('syncStatusConnected')}
                   </div>
                 )}
                 <button className="btn-secondary" onClick={onLogout} style={{ padding: '4px 8px', fontSize: '12px' }}>
-                  <LogOut size={12} /> 登出
+                  <LogOut size={12} /> {t('logout')}
                 </button>
               </div>
             </>
           ) : (
             <>
               <div style={{ fontSize: '12px', opacity: 0.7, marginBottom: '8px' }}>
-                連結 Google 帳號以啟用即時雲端硬碟同步與備份。
+                {t('syncPrompt')}
               </div>
               <button className="btn-primary" onClick={onLogin}>
-                <LogIn size={14} /> 連結 Google 雲端硬碟
+                <LogIn size={14} /> {t('connectDrive')}
               </button>
             </>
           )}

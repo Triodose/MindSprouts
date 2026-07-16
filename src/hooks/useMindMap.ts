@@ -3,6 +3,7 @@ import type { MindMapNode, CanvasTransform, MindMapTheme, HistoryState } from '.
 import { DEFAULT_THEME, THEMES } from '../utils/themes';
 import * as treeUtils from '../utils/treeUtils';
 import * as googleDriveClient from '../utils/googleDriveClient';
+import { useI18n } from '../context/I18nContext';
 
 declare const google: any;
 
@@ -38,6 +39,7 @@ const migrateTree = (loadedTree: MindMapNode): MindMapNode => {
 };
 
 export const useMindMap = () => {
+  const { t } = useI18n();
   // MindMaps List Metadata
   const [mapsList, setMapsList] = useState<MindMapMetadata[]>([]);
   const [activeMapId, setActiveMapId] = useState<string>(() => {
@@ -45,7 +47,17 @@ export const useMindMap = () => {
   });
 
   // Current Active Tree State
-  const [tree, setTree] = useState<MindMapNode>(() => treeUtils.createInitialTree());
+  const [tree, setTree] = useState<MindMapNode>(() => 
+    treeUtils.createInitialTree(
+      t('initRoot'),
+      t('initChild1'),
+      t('initChild1_1'),
+      t('initChild1_2'),
+      t('initChild2'),
+      t('initChild2_1'),
+      t('initChild2_2')
+    )
+  );
 
   // Outliner Mode Toggle
   const [isOutlinerMode, setIsOutlinerMode] = useState<boolean>(false);
@@ -434,7 +446,15 @@ export const useMindMap = () => {
           }
         } else {
           // If Drive is empty (highly unlikely now), fallback to create default
-          const initial = treeUtils.createInitialTree();
+          const initial = treeUtils.createInitialTree(
+            t('initRoot'),
+            t('initChild1'),
+            t('initChild1_1'),
+            t('initChild1_2'),
+            t('initChild2'),
+            t('initChild2_1'),
+            t('initChild2_2')
+          );
           const fileId = await googleDriveClient.createSproutFile(token, folderId, initial.text, {
             id: '',
             title: initial.text,
@@ -679,10 +699,11 @@ export const useMindMap = () => {
   }, [tree, saveMapData, syncStatus]);
 
   // --- Create Map ---
-  const createNewMap = useCallback(async (title = '未命名心智圖') => {
+  const createNewMap = useCallback(async (title?: string) => {
+    const finalTitle = title || t('untitledMap');
     const initialTree = {
       id: 'root',
-      text: title,
+      text: finalTitle,
       children: []
     };
     const timeString = new Date().toISOString();
@@ -695,13 +716,13 @@ export const useMindMap = () => {
         const folderId = localStorage.getItem('google_folder_id') || googleFolderId;
         if (!folderId) throw new Error('Google Folder ID not set');
 
-        const fileId = await googleDriveClient.createSproutFile(token, folderId, title, {
+        const fileId = await googleDriveClient.createSproutFile(token, folderId, finalTitle, {
           id: '',
-          title,
+          title: finalTitle,
           content: initialTree
         });
 
-        setMapsList((prev) => [{ id: fileId, title, updated_at: timeString }, ...prev]);
+        setMapsList((prev) => [{ id: fileId, title: finalTitle, updated_at: timeString }, ...prev]);
         switchMap(fileId);
       } catch (err) {
         console.error('Failed to create new map in Google Drive:', err);
@@ -713,7 +734,7 @@ export const useMindMap = () => {
       const newId = Math.random().toString(36).substring(2, 9);
       const newMap = {
         id: newId,
-        title,
+        title: finalTitle,
         content: initialTree,
         updated_at: timeString
       };
@@ -724,12 +745,12 @@ export const useMindMap = () => {
       setMapsList(updated.map(m => ({ id: m.id, title: m.title, updated_at: m.updated_at })));
       switchMap(newId);
     }
-  }, [user, switchMap, getLocalMaps, getValidToken, googleFolderId]);
+  }, [user, switchMap, getLocalMaps, getValidToken, googleFolderId, t]);
 
   // --- Delete Map ---
   const deleteMap = useCallback(async (id: string) => {
     if (mapsList.length <= 1) {
-      alert('至少必須保留一張心智圖！');
+      alert(t('atLeastOneMap'));
       return;
     }
 
@@ -873,7 +894,7 @@ export const useMindMap = () => {
 
     const newChild: MindMapNode = {
       id: newId,
-      text: '分支主題',
+      text: t('branchTopic'),
       children: [],
       style: levelStyle ? { ...levelStyle } : undefined
     };
@@ -882,7 +903,7 @@ export const useMindMap = () => {
     updateTreeState(newTree);
     setSelectedId(newId);
     setEditingId(newId);
-  }, [tree, updateTreeState]);
+  }, [tree, updateTreeState, t]);
 
   const addNodeSibling = useCallback((targetId: string) => {
     if (targetId === 'root') {
@@ -898,7 +919,7 @@ export const useMindMap = () => {
 
     const newSibling: MindMapNode = {
       id: newId,
-      text: '分支主題',
+      text: t('branchTopic'),
       children: [],
       style: levelStyle ? { ...levelStyle } : undefined
     };
@@ -909,7 +930,7 @@ export const useMindMap = () => {
       setSelectedId(newId);
       setEditingId(newId);
     }
-  }, [tree, updateTreeState, addNodeChild]);
+  }, [tree, updateTreeState, addNodeChild, t]);
 
   const deleteNodeSelected = useCallback((targetId: string) => {
     if (targetId === 'root') return;
@@ -989,7 +1010,7 @@ export const useMindMap = () => {
       id: summaryId,
       startNodeId,
       endNodeId,
-      text: '概要',
+      text: t('defaultSummaryText'),
       style: {
         shape: 'rounded',
         borderStyle: 'solid'
@@ -999,7 +1020,7 @@ export const useMindMap = () => {
     const newTree = treeUtils.addSummary(tree, parent.id, newSummary);
     updateTreeState(newTree);
     setSelectedId(summaryId);
-  }, [tree, updateTreeState]);
+  }, [tree, updateTreeState, t]);
 
   const updateSummaryRange = useCallback((summaryId: string, startNodeId: string, endNodeId: string) => {
     const newTree = treeUtils.updateSummaryRange(tree, summaryId, startNodeId, endNodeId);
@@ -1040,7 +1061,7 @@ export const useMindMap = () => {
       id: newTree.id || 'root'
     };
     const migrated = migrateTree(sanitized);
-    const title = migrated.text || '匯入的心智圖';
+    const title = migrated.text || t('importedMap');
     const timeString = new Date().toISOString();
     const isConnected = localStorage.getItem('google_drive_connected') === 'true';
 
@@ -1073,7 +1094,7 @@ export const useMindMap = () => {
         setTimeout(() => centerCanvas(), 100);
       } catch (err) {
         console.error('Failed to import map to Google Drive:', err);
-        alert('匯入心智圖失敗！');
+        alert(t('importFailed'));
       } finally {
         setIsSyncing(false);
       }
@@ -1105,7 +1126,7 @@ export const useMindMap = () => {
       setEditingId(null);
       setTimeout(() => centerCanvas(), 100);
     }
-  }, [user, getLocalMaps, centerCanvas, getValidToken, googleFolderId]);
+  }, [user, getLocalMaps, centerCanvas, getValidToken, googleFolderId, t]);
 
   // --- Drag Operations ---
   const updateNodeOffsetSilent = useCallback((targetId: string, offset: { x: number; y: number } | undefined) => {
@@ -1133,7 +1154,7 @@ export const useMindMap = () => {
     setTree((latestTree) => {
       const newNode: MindMapNode = {
         id: newId,
-        text: '自由主題',
+        text: t('floatingTopic'),
         offset: { x, y },
         children: []
       };
@@ -1148,7 +1169,7 @@ export const useMindMap = () => {
     });
     setSelectedId(newId);
     setEditingId(newId);
-  }, [saveMapData]);
+  }, [saveMapData, t]);
 
   const reparentNode = useCallback((nodeId: string, newParentId: string) => {
     setTree((latestTree) => {

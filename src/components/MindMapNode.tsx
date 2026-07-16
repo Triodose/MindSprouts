@@ -74,29 +74,29 @@ const renderProgressSvg = (progress: number) => {
   );
 };
 
-const renderFlagIcon = (flagKey: string) => {
+const renderFlagIcon = (flagKey: string, t: (k: string) => string) => {
   const size = 13;
   switch (flagKey) {
     case 'red-flag':
-      return <span className="node-badge-flag flag-red" title="紅色標記"><Flag size={size} fill="currentColor" /></span>;
+      return <span className="node-badge-flag flag-red" title={t("flagRed")}><Flag size={size} fill="currentColor" /></span>;
     case 'orange-flag':
-      return <span className="node-badge-flag flag-orange" title="橘色標記"><Flag size={size} fill="currentColor" /></span>;
+      return <span className="node-badge-flag flag-orange" title={t("flagOrange")}><Flag size={size} fill="currentColor" /></span>;
     case 'yellow-flag':
-      return <span className="node-badge-flag flag-yellow" title="黃色標記"><Flag size={size} fill="currentColor" /></span>;
+      return <span className="node-badge-flag flag-yellow" title={t("flagYellow")}><Flag size={size} fill="currentColor" /></span>;
     case 'green-flag':
-      return <span className="node-badge-flag flag-green" title="綠色標記"><Flag size={size} fill="currentColor" /></span>;
+      return <span className="node-badge-flag flag-green" title={t("flagGreen")}><Flag size={size} fill="currentColor" /></span>;
     case 'blue-flag':
-      return <span className="node-badge-flag flag-blue" title="藍色標記"><Flag size={size} fill="currentColor" /></span>;
+      return <span className="node-badge-flag flag-blue" title={t("flagBlue")}><Flag size={size} fill="currentColor" /></span>;
     case 'purple-flag':
-      return <span className="node-badge-flag flag-purple" title="紫色標記"><Flag size={size} fill="currentColor" /></span>;
+      return <span className="node-badge-flag flag-purple" title={t("flagPurple")}><Flag size={size} fill="currentColor" /></span>;
     case 'star':
-      return <span className="node-badge-flag flag-star" title="重要星星"><Star size={size} fill="currentColor" /></span>;
+      return <span className="node-badge-flag flag-star" title={t("flagStar")}><Star size={size} fill="currentColor" /></span>;
     case 'heart':
-      return <span className="node-badge-flag flag-heart" title="喜愛心形"><Heart size={size} fill="currentColor" /></span>;
+      return <span className="node-badge-flag flag-heart" title={t("flagHeart")}><Heart size={size} fill="currentColor" /></span>;
     case 'question':
-      return <span className="node-badge-flag flag-question" title="待確認問號"><HelpCircle size={size} /></span>;
+      return <span className="node-badge-flag flag-question" title={t("flagQuestion")}><HelpCircle size={size} /></span>;
     case 'info':
-      return <span className="node-badge-flag flag-info" title="提示資訊"><Info size={size} /></span>;
+      return <span className="node-badge-flag flag-info" title={t("flagInfo")}><Info size={size} /></span>;
     default:
       return null;
   }
@@ -286,6 +286,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   isTimelineMode = false,
   extraMarginLeft
 }) => {
+  const { t } = useI18n();
   const isSelected = selectedId === node.id;
   const isEditing = editingId === node.id;
   const inputRef = useRef<HTMLInputElement>(null);
@@ -643,14 +644,14 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
 
           {/* Main Row: Badges, Text, Note */}
           <div className="node-card-main-row">
-            {node.flag && renderFlagIcon(node.flag)}
+            {node.flag && renderFlagIcon(node.flag, t)}
             {node.priority && (
-              <span className={`node-badge-priority priority-${node.priority}`} title={`優先級 P${node.priority}`}>
+              <span className={`node-badge-priority priority-${node.priority}`} title={`${t("priority")} P${node.priority}`}>
                 {node.priority}
               </span>
             )}
             {node.progress !== undefined && (
-              <span className="node-badge-progress" title={`任務進度 ${node.progress}%`}>
+              <span className="node-badge-progress" title={`${t("taskProgress")} ${node.progress}%`}>
                 {renderProgressSvg(node.progress)}
               </span>
             )}

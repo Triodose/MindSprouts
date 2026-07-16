@@ -11,6 +11,7 @@ import { findNode } from './utils/treeUtils';
 import { navigateLeft, navigateRight, navigateVertical } from './utils/treeNavigation';
 import type { SummaryPosition } from './types/mindmap';
 import { StickyNote } from 'lucide-react';
+import { useI18n } from './context/I18nContext';
 
 interface NotePopoverProps {
   nodeId: string;
@@ -20,6 +21,7 @@ interface NotePopoverProps {
 }
 
 const NotePopover: React.FC<NotePopoverProps> = ({ nodeId, initialNote, onSave, onClose }) => {
+  const { t } = useI18n();
   const [text, setText] = useState(initialNote);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -109,7 +111,7 @@ const NotePopover: React.FC<NotePopoverProps> = ({ nodeId, initialNote, onSave, 
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: '11px', fontWeight: 600, opacity: 0.8, display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <StickyNote size={12} /> 編輯備註
+          <StickyNote size={12} /> {t('noteEditor')}
         </span>
         <button
           onClick={onClose}
@@ -123,7 +125,7 @@ const NotePopover: React.FC<NotePopoverProps> = ({ nodeId, initialNote, onSave, 
             lineHeight: 1,
             padding: '2px'
           }}
-          title="關閉"
+          title={t('closeNote')}
         >
           ✕
         </button>
@@ -131,7 +133,7 @@ const NotePopover: React.FC<NotePopoverProps> = ({ nodeId, initialNote, onSave, 
       <textarea
         value={text}
         onChange={(e) => handleChange(e.target.value)}
-        placeholder="輸入此主題的備註內容..."
+        placeholder={t('notePlaceholder')}
         style={{
           width: '100%',
           height: '90px',
@@ -153,6 +155,7 @@ const NotePopover: React.FC<NotePopoverProps> = ({ nodeId, initialNote, onSave, 
 };
 
 export default function App() {
+  const { t } = useI18n();
   const {
     tree,
     selectedId,
@@ -682,7 +685,7 @@ export default function App() {
             animation: 'pulse-toast 1.5s infinite alternate'
           }}
         >
-          <span>🔗 關聯線連接模式：請點擊另一個節點建立關聯，或按 Esc 取消</span>
+          <span>🔗 {t('connectingPrompt')}</span>
           <button 
             onClick={cancelConnection} 
             style={{
