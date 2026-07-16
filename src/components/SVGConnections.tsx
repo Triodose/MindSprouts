@@ -216,7 +216,8 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
                     if (childCenterY < targetY) {
                       const branchEl = cardEl.closest('.tree-branch') as HTMLElement;
                       if (branchEl) {
-                        const diff = targetY - childCenterY;
+                        // Double the diff to compensate for flex container centering (justify-content: center)
+                        const diff = (targetY - childCenterY) * 2;
                         branchEl.style.transition = 'none';
                         branchEl.style.marginTop = `${diff}px`;
                         // Force a reflow for this branch
@@ -228,7 +229,8 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
                     if (childCenterY > targetY) {
                       const branchEl = cardEl.closest('.tree-branch') as HTMLElement;
                       if (branchEl) {
-                        const diff = childCenterY - targetY;
+                        // Double the diff to compensate for flex container centering (justify-content: center)
+                        const diff = (childCenterY - targetY) * 2;
                         branchEl.style.transition = 'none';
                         branchEl.style.marginTop = `-${diff}px`;
                         // Force a reflow for this branch
