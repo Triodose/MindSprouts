@@ -253,9 +253,7 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
                 return coords ? (coords.left + coords.width / 2 < pCoords.left + pCoords.width / 2) : false;
               })
               .sort((a, b) => {
-                const rA = getCoordsForChild(a.id);
-                const rB = getCoordsForChild(b.id);
-                return (rA?.top || 0) - (rB?.top || 0);
+                return node.children.indexOf(a) - node.children.indexOf(b);
               });
               
             const rightChildren = node.children
@@ -264,9 +262,7 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
                 return coords ? (coords.left + coords.width / 2 >= pCoords.left + pCoords.width / 2) : false;
               })
               .sort((a, b) => {
-                const rA = getCoordsForChild(a.id);
-                const rB = getCoordsForChild(b.id);
-                return (rA?.top || 0) - (rB?.top || 0);
+                return node.children.indexOf(a) - node.children.indexOf(b);
               });
 
             const isLeftScreen = (cCoords.left + cCoords.width / 2 < pCoords.left + pCoords.width / 2);
