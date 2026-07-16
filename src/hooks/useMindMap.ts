@@ -590,6 +590,24 @@ export const useMindMap = () => {
           .eq('user_id', user.id);
 
         if (error) throw error;
+
+        // Also remove from local storage to prevent it from being treated as an unmigrated local map on refetch
+        const localMaps = getLocalMaps();
+        const updatedLocal = localMaps.filter((m) => m.id !== id);
+        localStorage.setItem(LOCAL_STORAGE_MAPS_KEY, JSON.stringify(updatedLocal));
+
+        // Filter out from the custom sorting order
+        const savedOrder = localStorage.getItem('mindsprout_maps_order');
+        if (savedOrder) {
+          try {
+            const orderIds = JSON.parse(savedOrder);
+            const newOrder = orderIds.filter((oid: string) => oid !== id);
+            localStorage.setItem('mindsprout_maps_order', JSON.stringify(newOrder));
+          } catch (e) {
+            console.error(e);
+          }
+        }
+
         setMapsList((prev) => prev.filter((m) => m.id !== id));
       } catch (err) {
         console.error('Failed to delete map from Supabase:', err);
