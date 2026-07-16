@@ -207,6 +207,8 @@ export default function App() {
     updateSummaryRange,
     deleteSummary,
     reorderMapsList,
+    syncStatus,
+    saveMapData,
     isGoogleDriveConfigured
   } = useMindMap();
 
@@ -739,6 +741,9 @@ export default function App() {
         onAddNoteClick={handleToolbarAddNote}
         uiTheme={uiTheme}
         onToggleUiTheme={toggleUiTheme}
+        syncStatus={syncStatus}
+        onSave={() => saveMapData(tree, true)}
+        isConnected={user !== null}
       />
 
       {/* Right Inspector Sidebar */}
@@ -749,6 +754,7 @@ export default function App() {
         theme={theme}
         user={user}
         isSyncing={isSyncing}
+        syncStatus={syncStatus}
         isGoogleDriveConfigured={isGoogleDriveConfigured}
         isAutoLayout={isAutoLayout}
         onToggleAutoLayout={toggleAutoLayout}

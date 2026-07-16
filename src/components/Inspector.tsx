@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { MindMapNode, MindMapTheme } from '../types/mindmap';
 import { THEMES } from '../utils/themes';
-import { LogIn, LogOut, Cloud, CloudOff, RefreshCw, Flag, Star, Heart, HelpCircle, Info } from 'lucide-react';
+import { LogIn, LogOut, Cloud, CloudOff, RefreshCw, Flag, Star, Heart, HelpCircle, Info, Clock, AlertCircle } from 'lucide-react';
 import { findParent } from '../utils/treeUtils';
 
 interface InspectorProps {
@@ -11,6 +11,7 @@ interface InspectorProps {
   theme: MindMapTheme;
   user: any;
   isSyncing: boolean;
+  syncStatus?: 'saved' | 'dirty' | 'syncing' | 'error';
   isGoogleDriveConfigured: boolean;
   isAutoLayout: boolean;
   onToggleAutoLayout: (active: boolean) => void;
@@ -84,7 +85,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   tree,
   theme,
   user,
-  isSyncing,
+  syncStatus = 'saved',
   isGoogleDriveConfigured,
   isAutoLayout,
   onToggleAutoLayout,
@@ -1271,18 +1272,29 @@ export const Inspector: React.FC<InspectorProps> = ({
                 </span>
               </div>
               <div className="inspector-row" style={{ margin: 0 }}>
-                <div className={`db-status-pill ${isSyncing ? 'db-status-offline' : 'db-status-online'}`}>
-                  {isSyncing ? (
-                    <>
-                      <RefreshCw size={12} className="spin" style={{ animation: 'spin 1.5s linear infinite' }} />
-                      同步中...
-                    </>
-                  ) : (
-                    <>
-                      <Cloud size={14} /> 已連線至雲端硬碟
-                    </>
-                  )}
-                </div>
+                {syncStatus === 'syncing' && (
+                  <div className="db-status-pill" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>
+                    <RefreshCw size={12} className="spin" style={{ animation: 'spin 1.5s linear infinite' }} />
+                    同步中...
+                  </div>
+                )}
+                {syncStatus === 'dirty' && (
+                  <div className="db-status-pill" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
+                    <Clock size={12} />
+                    有未儲存的變更
+                  </div>
+                )}
+                {syncStatus === 'error' && (
+                  <div className="db-status-pill" style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
+                    <AlertCircle size={12} />
+                    同步失敗
+                  </div>
+                )}
+                {syncStatus === 'saved' && (
+                  <div className="db-status-pill db-status-online">
+                    <Cloud size={14} /> 已連線至雲端硬碟
+                  </div>
+                )}
                 <button className="btn-secondary" onClick={onLogout} style={{ padding: '4px 8px', fontSize: '12px' }}>
                   <LogOut size={12} /> 登出
                 </button>

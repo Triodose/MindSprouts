@@ -3,7 +3,7 @@ import {
   Plus, GitBranch, Trash2, Undo2, Redo2, 
   ZoomIn, ZoomOut, Maximize, Download, 
   Upload, HelpCircle, FileText, Image as ImageIcon,
-  List, Map, Link2, Sun, Moon, StickyNote
+  List, Map, Link2, Sun, Moon, StickyNote, Save, RefreshCw
 } from 'lucide-react';
 import type { MindMapNode } from '../types/mindmap';
 import * as exportUtils from '../utils/exportUtils';
@@ -31,6 +31,9 @@ interface ToolbarProps {
   onAddNoteClick?: () => void;
   uiTheme: 'light' | 'dark';
   onToggleUiTheme: () => void;
+  syncStatus: 'saved' | 'dirty' | 'syncing' | 'error';
+  onSave: () => void;
+  isConnected: boolean;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -55,7 +58,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onCancelConnection,
   onAddNoteClick,
   uiTheme,
-  onToggleUiTheme
+  onToggleUiTheme,
+  syncStatus,
+  onSave,
+  isConnected
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -71,12 +77,16 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     reader.onload = (event) => {
       const text = event.target?.result as string;
       try {
-        if (file.name.endsWith('.json')) {
+        if (file.name.endsWith('.json') || file.name.endsWith('.sprout')) {
           const parsed = JSON.parse(text);
-          if (parsed && typeof parsed === 'object' && parsed.id && parsed.text) {
-            onImportTree(parsed);
+          let treeData = parsed;
+          if (parsed && typeof parsed === 'object' && parsed.content) {
+            treeData = parsed.content;
+          }
+          if (treeData && typeof treeData === 'object' && treeData.id && treeData.text) {
+            onImportTree(treeData);
           } else {
-            alert('無效的 JSON 心智圖檔案！');
+            alert('無效的心智圖檔案格式！');
           }
         } else if (file.name.endsWith('.md')) {
           const parsedTree = exportUtils.parseMarkdownToTree(text);
@@ -235,10 +245,43 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 
       {/* File import / export */}
       <div className="toolbar-group">
+        <button
+          className={`toolbar-button ${syncStatus === 'dirty' ? 'dirty-btn' : ''}`}
+          onClick={onSave}
+          disabled={!isConnected || syncStatus === 'syncing'}
+          data-tooltip={
+            !isConnected
+              ? "本地儲存模式 (自動儲存) 💾"
+              : syncStatus === 'dirty'
+              ? "有未同步的變更，點擊儲存並同步至雲端硬碟 💾"
+              : syncStatus === 'syncing'
+              ? "雲端同步中... ⏳"
+              : syncStatus === 'error'
+              ? "同步失敗，點擊重試 ❌"
+              : "已同步至雲端硬碟 🟢"
+          }
+        >
+          {syncStatus === 'syncing' ? (
+            <RefreshCw size={18} className="spin" style={{ animation: 'spin 1.5s linear infinite', color: '#3b82f6' }} />
+          ) : (
+            <Save
+              size={18}
+              style={{
+                color: !isConnected
+                  ? 'var(--text-secondary)'
+                  : syncStatus === 'dirty'
+                  ? '#f59e0b'
+                  : syncStatus === 'error'
+                  ? '#ef4444'
+                  : '#22c55e'
+              }}
+            />
+          )}
+        </button>
         <input
           ref={fileInputRef}
           type="file"
-          accept=".json,.md"
+          accept=".json,.md,.sprout"
           onChange={handleFileChange}
           style={{ display: 'none' }}
         />
