@@ -79,8 +79,8 @@ body {
 }
 
 .tree-branch.has-boundary {
-  margin-top: 14px;
-  margin-bottom: 14px;
+  margin-top: 7px;
+  margin-bottom: 7px;
 }
 
 /* Horizontal spacing for Org Chart and Timeline siblings */
@@ -109,7 +109,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 28px; /* Increased vertical spacing to prevent sibling overlap */
+  gap: 14px; /* Halved vertical spacing to make siblings closer */
   margin-left: 40px; /* Halved parent-child column spacing */
   position: relative;
   flex-shrink: 0; /* Prevent children column shrinking */
@@ -257,7 +257,7 @@ body {
   align-items: flex-start;
   margin-left: 32px;
   margin-top: 10px;
-  gap: 12px;
+  gap: 6px; /* Halved vertical spacing */
 }
 
 /* 5. Brace Map (Visually horizontal, curves are styled in SVG) */
@@ -274,7 +274,7 @@ body {
 .tree-branch.structure-brace > .node-row > .tree-children {
   flex-direction: column;
   justify-content: center;
-  gap: 28px;
+  gap: 14px; /* Halved vertical spacing */
   margin-left: 40px;
 }
 
@@ -350,7 +350,7 @@ body {
 .tree-branch.structure-fishbone > .node-row > .tree-children {
   flex-direction: column;
   justify-content: center;
-  gap: 30px;
+  gap: 15px; /* Halved vertical spacing */
   margin-left: 40px;
 }
 
