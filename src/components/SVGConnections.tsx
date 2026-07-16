@@ -245,66 +245,104 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
             const childIdx = node.children.findIndex(c => c.id === child.id);
             const isLeftScreen = childIdx % 2 !== 0;
 
-            const leftChildren = node.children.filter((_, idx) => idx % 2 !== 0);
-            const rightChildren = node.children.filter((_, idx) => idx % 2 === 0);
+            let connectionType = 'center';
+            let ptI = 4;
+            let startYVal: number | undefined = undefined;
 
-            const k = isLeftScreen 
-              ? leftChildren.findIndex(c => c.id === child.id)
-              : rightChildren.findIndex(c => c.id === child.id);
+            if (cCoords) {
+              const childCenterY = cCoords.top + cCoords.height / 2;
+              
+              // Filter out siblings on the same side
+              const siblingsOnSameSide = node.children.filter((_, idx) => (idx % 2 !== 0) === isLeftScreen);
+              
+              const siblingsWithY = siblingsOnSameSide.map(c => {
+                const el = treeContainer.querySelector(`[data-node-id="${c.id}"]`);
+                const rect = el ? el.getBoundingClientRect() : null;
+                const coords = rect ? getUnzoomedCoords(rect) : null;
+                const centerY = coords ? (coords.top + coords.height / 2) : 0;
+                return { id: c.id, centerY, hasCoords: !!coords };
+              });
 
-            const M = isLeftScreen ? leftChildren.length : rightChildren.length;
-            
-            // Priority list of connection points (strictly sorted from top to bottom based on M)
-            let pt = { type: 'center', i: 4 };
-            if (M === 1) {
-              pt = { type: 'center', i: 4 };
-            } else if (M === 2) {
-              if (k === 0) pt = { type: 'top', i: isLeftScreen ? 3 : 5 };
-              else pt = { type: 'center', i: 4 };
-            } else if (M === 3) {
-              if (k === 0) pt = { type: 'top', i: isLeftScreen ? 3 : 5 };
-              else if (k === 1) pt = { type: 'center', i: 4 };
-              else pt = { type: 'bottom', i: isLeftScreen ? 3 : 5 };
-            } else if (M === 4) {
-              if (k === 0) pt = { type: 'top', i: isLeftScreen ? 3 : 5 };
-              else if (k === 1) pt = { type: 'center', i: 4 };
-              else if (k === 2) pt = { type: 'bottom', i: isLeftScreen ? 2 : 6 };
-              else pt = { type: 'bottom', i: isLeftScreen ? 3 : 5 };
-            } else if (M === 5) {
-              if (k === 0) pt = { type: 'top', i: isLeftScreen ? 3 : 5 };
-              else if (k === 1) pt = { type: 'top', i: isLeftScreen ? 2 : 6 };
-              else if (k === 2) pt = { type: 'center', i: 4 };
-              else if (k === 3) pt = { type: 'bottom', i: isLeftScreen ? 2 : 6 };
-              else pt = { type: 'bottom', i: isLeftScreen ? 3 : 5 };
-            } else if (M === 6) {
-              if (k === 0) pt = { type: 'top', i: isLeftScreen ? 3 : 5 };
-              else if (k === 1) pt = { type: 'top', i: isLeftScreen ? 2 : 6 };
-              else if (k === 2) pt = { type: 'top', i: isLeftScreen ? 1 : 7 };
-              else if (k === 3) pt = { type: 'center', i: 4 };
-              else if (k === 4) pt = { type: 'bottom', i: isLeftScreen ? 2 : 6 };
-              else pt = { type: 'bottom', i: isLeftScreen ? 3 : 5 };
+              // Separate into top, center, bottom groups dynamically based on visual coordinates
+              const topGroup = siblingsWithY.filter(s => s.hasCoords && s.centerY < pCoords.top - 5).sort((a, b) => a.centerY - b.centerY);
+              const bottomGroup = siblingsWithY.filter(s => s.hasCoords && s.centerY > pCoords.bottom + 5).sort((a, b) => a.centerY - b.centerY);
+              const centerGroup = siblingsWithY.filter(s => !s.hasCoords || (s.centerY >= pCoords.top - 5 && s.centerY <= pCoords.bottom + 5)).sort((a, b) => a.centerY - b.centerY);
+
+              if (childCenterY < pCoords.top - 5) {
+                connectionType = 'top';
+                const groupIdx = topGroup.findIndex(s => s.id === child.id);
+                const count = topGroup.length;
+                ptI = isLeftScreen ? (4 - count + groupIdx) : (4 + count - groupIdx);
+              } else if (childCenterY > pCoords.bottom + 5) {
+                connectionType = 'bottom';
+                const groupIdx = bottomGroup.findIndex(s => s.id === child.id);
+                const count = bottomGroup.length;
+                ptI = isLeftScreen ? (4 - count + (count - 1 - groupIdx)) : (4 + count - (count - 1 - groupIdx));
+              } else {
+                connectionType = 'center';
+                const groupIdx = centerGroup.findIndex(s => s.id === child.id);
+                const count = centerGroup.length;
+                startYVal = pCoords.top + (pCoords.height * (groupIdx + 1)) / (count + 1);
+              }
             } else {
-              if (k === 0) pt = { type: 'top', i: isLeftScreen ? 3 : 5 };
-              else if (k === 1) pt = { type: 'top', i: isLeftScreen ? 2 : 6 };
-              else if (k === 2) pt = { type: 'top', i: isLeftScreen ? 1 : 7 };
-              else if (k === 3) pt = { type: 'center', i: 4 };
-              else if (k === 4) pt = { type: 'bottom', i: isLeftScreen ? 1 : 7 };
-              else if (k === 5) pt = { type: 'bottom', i: isLeftScreen ? 2 : 6 };
-              else if (k === 6) pt = { type: 'bottom', i: isLeftScreen ? 3 : 5 };
-              else pt = { type: 'center', i: 4 };
+              // Fallback static mapping if coordinates not loaded yet
+              const leftChildren = node.children.filter((_, idx) => idx % 2 !== 0);
+              const rightChildren = node.children.filter((_, idx) => idx % 2 === 0);
+              const k = isLeftScreen 
+                ? leftChildren.findIndex(c => c.id === child.id)
+                : rightChildren.findIndex(c => c.id === child.id);
+              const M = isLeftScreen ? leftChildren.length : rightChildren.length;
+
+              if (M === 1) {
+                connectionType = 'center';
+                ptI = 4;
+              } else if (M === 2) {
+                if (k === 0) {
+                  connectionType = 'top';
+                  ptI = isLeftScreen ? 3 : 5;
+                } else {
+                  connectionType = 'center';
+                  ptI = 4;
+                }
+              } else if (M === 3) {
+                if (k === 0) {
+                  connectionType = 'top';
+                  ptI = isLeftScreen ? 3 : 5;
+                } else if (k === 1) {
+                  connectionType = 'center';
+                  ptI = 4;
+                } else {
+                  connectionType = 'bottom';
+                  ptI = isLeftScreen ? 3 : 5;
+                }
+              } else {
+                if (k === 0) {
+                  connectionType = 'top';
+                  ptI = isLeftScreen ? 3 : 5;
+                } else if (k === 1) {
+                  connectionType = 'center';
+                  ptI = 4;
+                } else if (k === M - 1) {
+                  connectionType = 'bottom';
+                  ptI = isLeftScreen ? 3 : 5;
+                } else {
+                  connectionType = 'bottom';
+                  ptI = isLeftScreen ? 2 : 6;
+                }
+              }
             }
-            
-            if (pt.type === 'center') {
+
+            if (connectionType === 'center') {
               startX = isLeftScreen ? pCoords.left : pCoords.right;
-              startY = pCoords.top + pCoords.height / 2;
-            } else if (pt.type === 'top') {
-              startX = pCoords.left + (pCoords.width * pt.i) / 8;
+              startY = startYVal !== undefined ? startYVal : (pCoords.top + pCoords.height / 2);
+            } else if (connectionType === 'top') {
+              startX = pCoords.left + (pCoords.width * ptI) / 8;
               startY = pCoords.top;
             } else {
-              startX = pCoords.left + (pCoords.width * pt.i) / 8;
+              startX = pCoords.left + (pCoords.width * ptI) / 8;
               startY = pCoords.bottom;
             }
-            
+
             if (isLeftScreen) {
               endX = cCoords.right;
               endY = cCoords.top + cCoords.height / 2;
