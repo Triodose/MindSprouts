@@ -163,9 +163,9 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
       };
 
       // 0. Realign first-level nodes vertically if they push past the root card top/bottom borders to prevent crossing
-      const rootNode = tree.children.find((c: MindMapNode) => c.id === 'root');
+      const rootNode = tree?.children?.find((c: MindMapNode) => c.id === 'root');
       const parentEl = rootNode ? treeContainer.querySelector(`[data-node-id="${rootNode.id}"]`) : null;
-      if (rootNode && parentEl) {
+      if (rootNode && rootNode.children && parentEl) {
         const pRect = parentEl.getBoundingClientRect();
         const pCoords = getUnzoomedCoords(pRect);
 
@@ -204,24 +204,26 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
               if (cardEl) {
                 const cRect = cardEl.getBoundingClientRect();
                 const cCoords = getUnzoomedCoords(cRect);
-                const childCenterY = cCoords.top + cCoords.height / 2;
+                if (cCoords) {
+                  const childCenterY = cCoords.top + cCoords.height / 2;
 
-                if (ptType === 'bottom') {
-                  const targetY = pCoords.bottom + 16;
-                  if (childCenterY < targetY) {
-                    const branchEl = cardEl.closest('.tree-branch') as HTMLElement;
-                    if (branchEl) {
-                      const diff = targetY - childCenterY;
-                      branchEl.style.marginTop = `${diff}px`;
+                  if (ptType === 'bottom') {
+                    const targetY = pCoords.bottom + 16;
+                    if (childCenterY < targetY) {
+                      const branchEl = cardEl.closest('.tree-branch') as HTMLElement;
+                      if (branchEl) {
+                        const diff = targetY - childCenterY;
+                        branchEl.style.marginTop = `${diff}px`;
+                      }
                     }
-                  }
-                } else if (ptType === 'top') {
-                  const targetY = pCoords.top - 16;
-                  if (childCenterY > targetY) {
-                    const branchEl = cardEl.closest('.tree-branch') as HTMLElement;
-                    if (branchEl) {
-                      const diff = childCenterY - targetY;
-                      branchEl.style.marginTop = `-${diff}px`;
+                  } else if (ptType === 'top') {
+                    const targetY = pCoords.top - 16;
+                    if (childCenterY > targetY) {
+                      const branchEl = cardEl.closest('.tree-branch') as HTMLElement;
+                      if (branchEl) {
+                        const diff = childCenterY - targetY;
+                        branchEl.style.marginTop = `-${diff}px`;
+                      }
                     }
                   }
                 }
