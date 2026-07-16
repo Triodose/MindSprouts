@@ -346,7 +346,10 @@ export const useMindMap = () => {
       try {
         const token = await getValidToken();
         const folderId = localStorage.getItem('google_folder_id') || googleFolderId;
-        if (!folderId) throw new Error('Google Folder ID not set');
+        if (!folderId) {
+          // Folder is still being initialized in handleSuccessfulLogin, skip listing files for now
+          return;
+        }
 
         // 1. Fetch current maps from Google Drive
         const driveFiles = await googleDriveClient.listSproutFiles(token, folderId);
@@ -455,10 +458,10 @@ export const useMindMap = () => {
     }
   }, [user, activeMapId, getLocalMaps, applyCustomSort, getValidToken, googleFolderId]);
 
-  // Trigger fetch when user status changes or active ID switches locally
+  // Trigger fetch when user status changes, active ID switches, or folder ID becomes available
   useEffect(() => {
     fetchMapsList();
-  }, [user]);
+  }, [user, googleFolderId]);
 
   // --- Load Selected Map Content ---
   useEffect(() => {
