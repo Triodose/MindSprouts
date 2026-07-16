@@ -90,6 +90,7 @@ export const useMindMap = () => {
 
   // Sync state reference to avoid stale updates
   const saveTimeoutRef = useRef<any | null>(null);
+  const activeMapIdRef = useRef(activeMapId);
 
   // Center Canvas Helper
   const centerCanvas = useCallback(() => {
@@ -482,12 +483,16 @@ export const useMindMap = () => {
 
   // Save transform state
   useEffect(() => {
-    if (activeMapId) {
+    // Only save the transform if it's for the currently active map, 
+    // and ONLY if the activeMapId in the ref matches the current activeMapId.
+    if (activeMapId && activeMapId === activeMapIdRef.current) {
       const savedTransforms = localStorage.getItem('mindsprout_map_transforms');
       const transforms = savedTransforms ? JSON.parse(savedTransforms) : {};
       transforms[activeMapId] = transform;
       localStorage.setItem('mindsprout_map_transforms', JSON.stringify(transforms));
     }
+    // Update the ref to the current activeMapId
+    activeMapIdRef.current = activeMapId;
   }, [transform, activeMapId]);
 
   // Theme settings (Mind Map Color Theme, saved in the document)
