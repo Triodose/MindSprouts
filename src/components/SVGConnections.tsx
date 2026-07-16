@@ -174,9 +174,13 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
           const cardEl = treeContainer.querySelector(`[data-node-id="${child.id}"]`);
           const branchEl = cardEl?.closest('.tree-branch') as HTMLElement;
           if (branchEl) {
+            branchEl.style.transition = 'none'; // Temporarily disable margin transition
             branchEl.style.marginTop = '';
           }
         });
+
+        // Force a single reflow for the reset
+        parentEl.getBoundingClientRect();
 
         // Only apply adjustment in mindmap layout structure
         const structure = rootNode.style?.structure || 'logic';
@@ -213,7 +217,10 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
                       const branchEl = cardEl.closest('.tree-branch') as HTMLElement;
                       if (branchEl) {
                         const diff = targetY - childCenterY;
+                        branchEl.style.transition = 'none';
                         branchEl.style.marginTop = `${diff}px`;
+                        // Force a reflow for this branch
+                        branchEl.getBoundingClientRect();
                       }
                     }
                   } else if (ptType === 'top') {
@@ -222,7 +229,10 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
                       const branchEl = cardEl.closest('.tree-branch') as HTMLElement;
                       if (branchEl) {
                         const diff = childCenterY - targetY;
+                        branchEl.style.transition = 'none';
                         branchEl.style.marginTop = `-${diff}px`;
+                        // Force a reflow for this branch
+                        branchEl.getBoundingClientRect();
                       }
                     }
                   }
@@ -234,6 +244,17 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
           adjustSide(leftChildren);
           adjustSide(rightChildren);
         }
+
+        // Restore transitions after layout settles
+        setTimeout(() => {
+          rootNode.children?.forEach(child => {
+            const cardEl = treeContainer.querySelector(`[data-node-id="${child.id}"]`);
+            const branchEl = cardEl?.closest('.tree-branch') as HTMLElement;
+            if (branchEl) {
+              branchEl.style.transition = '';
+            }
+          });
+        }, 50);
       }
 
       // 1. Traverse Hierarchical Branches
