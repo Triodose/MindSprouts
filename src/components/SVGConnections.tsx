@@ -242,35 +242,16 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
             endX = (cCoords.left + cCoords.width / 2 < startX) ? cCoords.right : cCoords.left;
             endY = cCoords.top + cCoords.height / 2;
           } else if (isRootNode && structure === 'mindmap') {
-            const getCoordsForChild = (cId: string) => {
-              const el = treeContainer.querySelector(`[data-node-id="${cId}"]`);
-              return el ? getUnzoomedCoords(el.getBoundingClientRect()) : null;
-            };
+            const childIdx = node.children.findIndex(c => c.id === child.id);
+            const isLeftScreen = childIdx % 2 !== 0;
 
-            const leftChildren = node.children
-              .filter(c => {
-                const coords = getCoordsForChild(c.id);
-                return coords ? (coords.left + coords.width / 2 < pCoords.left + pCoords.width / 2) : false;
-              })
-              .sort((a, b) => {
-                return node.children.indexOf(a) - node.children.indexOf(b);
-              });
-              
-            const rightChildren = node.children
-              .filter(c => {
-                const coords = getCoordsForChild(c.id);
-                return coords ? (coords.left + coords.width / 2 >= pCoords.left + pCoords.width / 2) : false;
-              })
-              .sort((a, b) => {
-                return node.children.indexOf(a) - node.children.indexOf(b);
-              });
+            const leftChildren = node.children.filter((_, idx) => idx % 2 !== 0);
+            const rightChildren = node.children.filter((_, idx) => idx % 2 === 0);
 
-            const isLeftScreen = (cCoords.left + cCoords.width / 2 < pCoords.left + pCoords.width / 2);
-            
             const k = isLeftScreen 
               ? leftChildren.findIndex(c => c.id === child.id)
               : rightChildren.findIndex(c => c.id === child.id);
-            
+
             const M = isLeftScreen ? leftChildren.length : rightChildren.length;
             
             // Priority list of connection points (strictly sorted from top to bottom based on M)
