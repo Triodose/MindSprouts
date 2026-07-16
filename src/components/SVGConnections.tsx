@@ -1027,11 +1027,15 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
 
       // 2. MutationObserver for DOM layout/structural changes (collapsing, rendering new branches)
       mutationObserver = new MutationObserver((mutations) => {
-        // Skip mutations that originate from the SVG itself or the relationship labels to avoid infinite loops
+        // Skip mutations that originate from the SVG itself, relationship labels, or style changes on tree-branches (to avoid infinite loop of marginTop adjustments)
         const hasExternalMutation = mutations.some((m) => {
           const target = m.target as HTMLElement;
           if (!target || typeof target.closest !== 'function') return true;
-          return !target.closest('.svg-connections') && !target.closest('.relationship-label-card');
+          
+          const isSvgOrRel = target.closest('.svg-connections') || target.closest('.relationship-label-card');
+          const isTreeBranchStyle = target.classList && target.classList.contains('tree-branch') && m.attributeName === 'style';
+          
+          return !isSvgOrRel && !isTreeBranchStyle;
         });
         if (hasExternalMutation) {
           calculateConnections();
