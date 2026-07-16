@@ -2,6 +2,8 @@
 
 MindSprouts 是一款極致輕量、美觀且高效能的 React 心智圖編輯器。本專案採用**完全無伺服器 (Serverless & Databaseless) 的純前端架構**，所有使用者的心智圖資料皆 100% 安全地同步儲存至使用者個人的 **Google Drive (雲端硬碟)**，實現零伺服器維護成本、數據完全在地隱私化，且依然支援跨裝置同步與離線編輯。
 
+🔗 **線上直接使用網址**：[https://mindsprouts.app](https://mindsprouts.app) (無需自建，直接連結您的 Google 帳號即可免費開始使用！)
+
 ---
 
 ## 🌟 核心特色功能 (Key Features)
