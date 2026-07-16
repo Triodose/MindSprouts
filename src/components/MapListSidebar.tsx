@@ -165,7 +165,9 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
               letterSpacing: '0.08em',
               color: 'var(--theme-text-color)',
               opacity: 0.5,
-              marginTop: '4px',
+              marginTop: '-6px', // Move up closer to "MindSprouts" text
+              alignSelf: 'flex-start',
+              marginLeft: '43px', // Align "g" with the "M" of MindSprouts
               textTransform: 'lowercase',
               fontStyle: 'italic'
             }}
