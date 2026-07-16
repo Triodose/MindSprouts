@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { MindMapNode, CanvasTransform, MindMapTheme, HistoryState } from '../types/mindmap';
 import { DEFAULT_THEME, THEMES } from '../utils/themes';
 import * as treeUtils from '../utils/treeUtils';
-import { supabase, isSupabaseConfigured } from '../utils/supabaseClient';
-import type { User } from '@supabase/supabase-js';
+import * as googleDriveClient from '../utils/googleDriveClient';
+
+declare const google: any;
 
 const LOCAL_STORAGE_MAPS_KEY = 'mindsprout_local_maps';
 const LOCAL_STORAGE_ACTIVE_ID_KEY = 'mindsprout_active_map_id';
@@ -12,6 +13,12 @@ export interface MindMapMetadata {
   id: string;
   title: string;
   updated_at: string;
+}
+
+export interface GoogleUserInfo {
+  name: string;
+  email: string;
+  avatar_url: string;
 }
 
 const migrateTree = (loadedTree: MindMapNode): MindMapNode => {
@@ -84,9 +91,27 @@ export const useMindMap = () => {
     return THEMES.find((t) => t.id === activeThemeId) || DEFAULT_THEME;
   }, [tree.themeId]);
 
-  // Supabase Auth States
-  const [user, setUser] = useState<User | null>(null);
+  // Google Drive & Identity Auth States
+  const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null);
+  const [googleTokenExpiry, setGoogleTokenExpiry] = useState<number>(0);
+  const [googleUserInfo, setGoogleUserInfo] = useState<GoogleUserInfo | null>(() => {
+    const cached = localStorage.getItem('google_user_info');
+    return cached ? JSON.parse(cached) : null;
+  });
+  const [googleFolderId, setGoogleFolderId] = useState<string | null>(() => {
+    return localStorage.getItem('google_folder_id');
+  });
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  // Mock a user object to match previous Supabase user signature
+  const user = useMemo(() => {
+    return googleUserInfo 
+      ? { email: googleUserInfo.email, user_metadata: { avatar_url: googleUserInfo.avatar_url } }
+      : null;
+  }, [googleUserInfo]);
+
+  // Client configuration and reference
+  const tokenClientRef = useRef<any>(null);
 
   // Sync state reference to avoid stale updates
   const saveTimeoutRef = useRef<any | null>(null);
@@ -128,22 +153,143 @@ export const useMindMap = () => {
     }
   }, []);
 
-  // --- Auth Handling ---
-  useEffect(() => {
-    if (!isSupabaseConfigured() || !supabase) return;
+  const handleSuccessfulLogin = useCallback(async (token: string) => {
+    setIsSyncing(true);
+    try {
+      // 1. Fetch Google user info
+      const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!userRes.ok) throw new Error('Failed to fetch Google user info');
+      const gUser = await userRes.json();
+      
+      const userInfo = {
+        name: gUser.name,
+        email: gUser.email,
+        avatar_url: gUser.picture
+      };
+      setGoogleUserInfo(userInfo);
+      localStorage.setItem('google_user_info', JSON.stringify(userInfo));
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+      // 2. Get or create app folder on Drive
+      const folderId = await googleDriveClient.getOrCreateAppFolder(token);
+      setGoogleFolderId(folderId);
+      localStorage.setItem('google_folder_id', folderId);
+    } catch (err) {
+      console.error('Failed to setup Google Drive session:', err);
+      // Logout on error to reset state
+      logoutGoogle();
+    } finally {
+      setIsSyncing(false);
+    }
   }, []);
+
+  const logoutGoogle = useCallback(() => {
+    setGoogleAccessToken(null);
+    setGoogleTokenExpiry(0);
+    setGoogleUserInfo(null);
+    setGoogleFolderId(null);
+    
+    localStorage.removeItem('google_access_token');
+    localStorage.removeItem('google_token_expiry');
+    localStorage.removeItem('google_folder_id');
+    localStorage.removeItem('google_user_info');
+    localStorage.removeItem('google_drive_connected');
+    
+    setActiveMapId('default-map');
+    localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, 'default-map');
+  }, []);
+
+  // --- Auth Handling & Client Init ---
+  useEffect(() => {
+    const initGoogleClient = () => {
+      if (typeof google === 'undefined') {
+        setTimeout(initGoogleClient, 100);
+        return;
+      }
+
+      tokenClientRef.current = google.accounts.oauth2.initTokenClient({
+        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+        scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+        callback: async (response: any) => {
+          if (response.error) {
+            console.error('Google authorization error:', response);
+            return;
+          }
+          const token = response.access_token;
+          const expiresAt = Date.now() + (response.expires_in || 3600) * 1000 - 60000;
+          
+          setGoogleAccessToken(token);
+          setGoogleTokenExpiry(expiresAt);
+          localStorage.setItem('google_access_token', token);
+          localStorage.setItem('google_token_expiry', expiresAt.toString());
+          localStorage.setItem('google_drive_connected', 'true');
+          
+          await handleSuccessfulLogin(token);
+        }
+      });
+      
+      // Silent refresh / restore connection on reload
+      const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+      const cachedToken = localStorage.getItem('google_access_token');
+      const cachedExpiry = localStorage.getItem('google_token_expiry');
+      
+      if (isConnected) {
+        if (cachedToken && cachedExpiry && Date.now() < parseInt(cachedExpiry)) {
+          setGoogleAccessToken(cachedToken);
+          setGoogleTokenExpiry(parseInt(cachedExpiry));
+          handleSuccessfulLogin(cachedToken);
+        } else {
+          // Silent token request
+          tokenClientRef.current?.requestAccessToken({ prompt: '' });
+        }
+      }
+    };
+
+    initGoogleClient();
+  }, [handleSuccessfulLogin]);
+
+  const getValidToken = useCallback(async (): Promise<string> => {
+    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+    if (!isConnected) throw new Error('Google Drive is not connected');
+
+    const token = googleAccessToken || localStorage.getItem('google_access_token');
+    const expiry = googleTokenExpiry || parseInt(localStorage.getItem('google_token_expiry') || '0');
+
+    if (token && expiry && Date.now() < expiry) {
+      return token;
+    }
+
+    return new Promise((resolve, reject) => {
+      if (!tokenClientRef.current) {
+        reject(new Error('Google Identity Services client not initialized'));
+        return;
+      }
+
+      const originalCallback = tokenClientRef.current.callback;
+      tokenClientRef.current.callback = async (response: any) => {
+        tokenClientRef.current.callback = originalCallback;
+
+        if (response.error) {
+          reject(new Error(`Google silent auth failed: ${response.error}`));
+          return;
+        }
+
+        const token = response.access_token;
+        const expiresAt = Date.now() + (response.expires_in || 3600) * 1000 - 60000;
+
+        setGoogleAccessToken(token);
+        setGoogleTokenExpiry(expiresAt);
+        localStorage.setItem('google_access_token', token);
+        localStorage.setItem('google_token_expiry', expiresAt.toString());
+
+        await handleSuccessfulLogin(token);
+        resolve(token);
+      };
+
+      tokenClientRef.current.requestAccessToken({ prompt: '' });
+    });
+  }, [handleSuccessfulLogin, googleAccessToken, googleTokenExpiry]);
 
   // --- Local Mode Helper ---
   // Seed initial local maps if empty
@@ -194,111 +340,100 @@ export const useMindMap = () => {
 
   // --- Load / Fetch Maps List ---
   const fetchMapsList = useCallback(async () => {
-    if (supabase && user) {
+    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+    if (isConnected) {
       setIsSyncing(true);
       try {
-        // 1. Fetch current maps from Supabase
-        const { data, error } = await supabase
-          .from('mindsprouts_mindmaps')
-          .select('id, title, updated_at')
-          .eq('user_id', user.id)
-          .order('updated_at', { ascending: false });
+        const token = await getValidToken();
+        const folderId = localStorage.getItem('google_folder_id') || googleFolderId;
+        if (!folderId) throw new Error('Google Folder ID not set');
 
-        if (error) throw error;
+        // 1. Fetch current maps from Google Drive
+        const driveFiles = await googleDriveClient.listSproutFiles(token, folderId);
+        
+        // Map Google Drive files into MindMapMetadata array
+        let driveMetadata: MindMapMetadata[] = driveFiles.map(f => {
+          const title = f.name.endsWith('.sprout') ? f.name.slice(0, -7) : f.name;
+          return {
+            id: f.id,
+            title,
+            updated_at: f.modifiedTime || f.createdTime || new Date().toISOString()
+          };
+        });
 
         // 2. Check if we have local maps that need to be migrated
         const localMaps = getLocalMaps();
-        // A map needs migration if its ID is 'default-map' or is not a valid UUID format,
-        // or if its ID is not present in the Supabase data list.
         const unmigratedMaps = localMaps.filter(lm => {
-          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lm.id);
-          return !isUuid || (data && !data.some(sm => sm.id === lm.id));
+          return lm.id === 'default-map' || !driveMetadata.some(dm => dm.id === lm.id);
         });
 
-        let updatedSupabaseData = data ? [...data] : [];
-
         if (unmigratedMaps.length > 0) {
-          console.log(`Found ${unmigratedMaps.length} unmigrated local maps. Uploading to Supabase...`);
+          console.log(`Found ${unmigratedMaps.length} unmigrated local maps. Uploading to Google Drive...`);
           const migratedLocalMaps = [...localMaps];
 
           for (const localMap of unmigratedMaps) {
             try {
-              // Insert into Supabase (let database generate UUID)
-              const { data: newMap, error: insertError } = await supabase
-                .from('mindsprouts_mindmaps')
-                .insert({
-                  title: localMap.title,
-                  content: localMap.content,
-                  user_id: user.id
-                })
-                .select()
-                .single();
+              // Create sprout file on Google Drive
+              const newFileId = await googleDriveClient.createSproutFile(token, folderId, localMap.title, {
+                id: localMap.id,
+                title: localMap.title,
+                content: localMap.content
+              });
 
-              if (insertError) throw insertError;
-
-              if (newMap) {
-                // Find index of this local map and update its ID in local storage to the new UUID
-                const idx = migratedLocalMaps.findIndex(m => m.id === localMap.id);
-                if (idx !== -1) {
-                  migratedLocalMaps[idx] = {
-                    ...migratedLocalMaps[idx],
-                    id: newMap.id,
-                    updated_at: newMap.updated_at
-                  };
-                }
-                
-                // If the migrated map was the currently active map, update the active map ID
-                if (activeMapId === localMap.id) {
-                  setActiveMapId(newMap.id);
-                  localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, newMap.id);
-                }
-
-                updatedSupabaseData.push({
-                  id: newMap.id,
-                  title: newMap.title,
-                  updated_at: newMap.updated_at
-                });
+              // Find index of this local map and update its ID in local storage to the Google Drive file ID
+              const idx = migratedLocalMaps.findIndex(m => m.id === localMap.id);
+              if (idx !== -1) {
+                migratedLocalMaps[idx] = {
+                  ...migratedLocalMaps[idx],
+                  id: newFileId,
+                  updated_at: new Date().toISOString()
+                };
               }
+              
+              // If the migrated map was the currently active map, update the active map ID
+              if (activeMapId === localMap.id) {
+                setActiveMapId(newFileId);
+                localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, newFileId);
+              }
+
+              driveMetadata.push({
+                id: newFileId,
+                title: localMap.title,
+                updated_at: new Date().toISOString()
+              });
             } catch (migrationErr) {
-              console.error('Failed to migrate local map:', localMap.title, migrationErr);
+              console.error('Failed to migrate local map to Google Drive:', localMap.title, migrationErr);
             }
           }
 
           // Save the updated IDs back to LocalStorage
           localStorage.setItem(LOCAL_STORAGE_MAPS_KEY, JSON.stringify(migratedLocalMaps));
           // Sort by custom order or updated_at descending
-          updatedSupabaseData = applyCustomSort(updatedSupabaseData);
+          driveMetadata = applyCustomSort(driveMetadata);
         }
 
         // 3. Update the state with the combined/migrated list
-        if (updatedSupabaseData.length > 0) {
-          setMapsList(applyCustomSort(updatedSupabaseData));
-          if (!updatedSupabaseData.some((m) => m.id === activeMapId)) {
-            setActiveMapId(updatedSupabaseData[0].id);
-            localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, updatedSupabaseData[0].id);
+        if (driveMetadata.length > 0) {
+          setMapsList(applyCustomSort(driveMetadata));
+          if (!driveMetadata.some((m) => m.id === activeMapId)) {
+            setActiveMapId(driveMetadata[0].id);
+            localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, driveMetadata[0].id);
           }
         } else {
-          // If Supabase is still empty (highly unlikely now), fallback to create default
+          // If Drive is empty (highly unlikely now), fallback to create default
           const initial = treeUtils.createInitialTree();
-          const { data: newMap, error: insertError } = await supabase
-            .from('mindsprouts_mindmaps')
-            .insert({
-              title: initial.text,
-              content: initial,
-              user_id: user.id
-            })
-            .select()
-            .single();
-
-          if (insertError) throw insertError;
-          if (newMap) {
-            setMapsList([{ id: newMap.id, title: newMap.title, updated_at: newMap.updated_at }]);
-            setActiveMapId(newMap.id);
-            localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, newMap.id);
-          }
+          const fileId = await googleDriveClient.createSproutFile(token, folderId, initial.text, {
+            id: '',
+            title: initial.text,
+            content: initial
+          });
+          
+          setMapsList([{ id: fileId, title: initial.text, updated_at: new Date().toISOString() }]);
+          setActiveMapId(fileId);
+          localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, fileId);
         }
       } catch (err) {
-        console.error('Failed to fetch maps from Supabase:', err);
+        console.error('Failed to fetch maps from Google Drive:', err);
       } finally {
         setIsSyncing(false);
       }
@@ -318,7 +453,7 @@ export const useMindMap = () => {
         localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, list[0].id);
       }
     }
-  }, [user, activeMapId, getLocalMaps, applyCustomSort]);
+  }, [user, activeMapId, getLocalMaps, applyCustomSort, getValidToken, googleFolderId]);
 
   // Trigger fetch when user status changes or active ID switches locally
   useEffect(() => {
@@ -328,18 +463,18 @@ export const useMindMap = () => {
   // --- Load Selected Map Content ---
   useEffect(() => {
     const loadActiveMapContent = async () => {
-      if (supabase && user) {
+      const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+      if (isConnected) {
+        // Prevent loading map content if activeMapId is not a valid Google Drive file ID
+        // (Wait for fetchMapsList to migrate local maps or correct the active ID)
+        const isValidId = mapsList.some(m => m.id === activeMapId);
+        if (!isValidId) return;
+
         setIsSyncing(true);
         try {
-          const { data, error } = await supabase
-            .from('mindsprouts_mindmaps')
-            .select('content')
-            .eq('id', activeMapId)
-            .eq('user_id', user.id)
-            .maybeSingle();
-
-          if (error) throw error;
-          if (data) {
+          const token = await getValidToken();
+          const data = await googleDriveClient.downloadSproutFile(token, activeMapId);
+          if (data && data.content) {
             const parsed = data.content as MindMapNode;
             const migrated = migrateTree(parsed);
             const finalTree = isAutoLayout ? treeUtils.clearSubNodeOffsets(migrated) : migrated;
@@ -360,7 +495,7 @@ export const useMindMap = () => {
             }, 500);
           }
         } catch (err) {
-          console.error('Failed to load map content:', err);
+          console.error('Failed to load map content from Google Drive:', err);
         } finally {
           setIsSyncing(false);
         }
@@ -411,33 +546,33 @@ export const useMindMap = () => {
     };
 
     loadActiveMapContent();
-  }, [activeMapId, user, getLocalMaps, centerCanvas, isAutoLayout]);
+  }, [activeMapId, user, getLocalMaps, centerCanvas, isAutoLayout, getValidToken, mapsList]);
 
   // --- Sync / Auto Save Content ---
   const saveMapData = useCallback(async (currentTree: MindMapNode) => {
     const timeString = new Date().toISOString();
+    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
 
-    if (supabase && user) {
+    if (isConnected) {
       setIsSyncing(true);
       try {
-        const { error } = await supabase
-          .from('mindsprouts_mindmaps')
-          .update({
-            title: currentTree.text,
-            content: currentTree,
-            updated_at: timeString
-          })
-          .eq('id', activeMapId)
-          .eq('user_id', user.id);
+        const token = await getValidToken();
+        await googleDriveClient.updateSproutFile(token, activeMapId, {
+          id: activeMapId,
+          title: currentTree.text,
+          content: currentTree
+        });
 
-        if (error) throw error;
+        const currentMeta = mapsList.find(m => m.id === activeMapId);
+        if (currentMeta && currentMeta.title !== currentTree.text) {
+          await googleDriveClient.renameSproutFile(token, activeMapId, currentTree.text);
+        }
 
-        // Update list metadata titles
         setMapsList((prev) =>
           prev.map((m) => (m.id === activeMapId ? { ...m, title: currentTree.text, updated_at: timeString } : m))
         );
       } catch (err) {
-        console.error('Failed to sync content with Supabase:', err);
+        console.error('Failed to sync content with Google Drive:', err);
       } finally {
         setIsSyncing(false);
       }
@@ -462,7 +597,7 @@ export const useMindMap = () => {
         prev.map((m) => (m.id === activeMapId ? { ...m, title: currentTree.text, updated_at: timeString } : m))
       );
     }
-  }, [user, activeMapId, getLocalMaps]);
+  }, [user, activeMapId, getLocalMaps, getValidToken, mapsList]);
 
   // Tree modifier with history
   const updateTreeState = useCallback((newTree: MindMapNode) => {
@@ -530,27 +665,25 @@ export const useMindMap = () => {
       children: []
     };
     const timeString = new Date().toISOString();
+    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
 
-    if (supabase && user) {
+    if (isConnected) {
       setIsSyncing(true);
       try {
-        const { data, error } = await supabase
-          .from('mindsprouts_mindmaps')
-          .insert({
-            title,
-            content: initialTree,
-            user_id: user.id
-          })
-          .select()
-          .single();
+        const token = await getValidToken();
+        const folderId = localStorage.getItem('google_folder_id') || googleFolderId;
+        if (!folderId) throw new Error('Google Folder ID not set');
 
-        if (error) throw error;
-        if (data) {
-          setMapsList((prev) => [{ id: data.id, title: data.title, updated_at: data.updated_at }, ...prev]);
-          switchMap(data.id);
-        }
+        const fileId = await googleDriveClient.createSproutFile(token, folderId, title, {
+          id: '',
+          title,
+          content: initialTree
+        });
+
+        setMapsList((prev) => [{ id: fileId, title, updated_at: timeString }, ...prev]);
+        switchMap(fileId);
       } catch (err) {
-        console.error('Failed to create new map in Supabase:', err);
+        console.error('Failed to create new map in Google Drive:', err);
       } finally {
         setIsSyncing(false);
       }
@@ -570,7 +703,7 @@ export const useMindMap = () => {
       setMapsList(updated.map(m => ({ id: m.id, title: m.title, updated_at: m.updated_at })));
       switchMap(newId);
     }
-  }, [user, switchMap, getLocalMaps]);
+  }, [user, switchMap, getLocalMaps, getValidToken, googleFolderId]);
 
   // --- Delete Map ---
   const deleteMap = useCallback(async (id: string) => {
@@ -585,16 +718,13 @@ export const useMindMap = () => {
       switchMap(remaining[0].id);
     }
 
-    if (supabase && user) {
+    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+
+    if (isConnected) {
       setIsSyncing(true);
       try {
-        const { error } = await supabase
-          .from('mindsprouts_mindmaps')
-          .delete()
-          .eq('id', id)
-          .eq('user_id', user.id);
-
-        if (error) throw error;
+        const token = await getValidToken();
+        await googleDriveClient.deleteSproutFile(token, id);
 
         // Also remove from local storage to prevent it from being treated as an unmigrated local map on refetch
         const localMaps = getLocalMaps();
@@ -615,7 +745,7 @@ export const useMindMap = () => {
 
         setMapsList((prev) => prev.filter((m) => m.id !== id));
       } catch (err) {
-        console.error('Failed to delete map from Supabase:', err);
+        console.error('Failed to delete map from Google Drive:', err);
       } finally {
         setIsSyncing(false);
       }
@@ -626,26 +756,19 @@ export const useMindMap = () => {
       localStorage.setItem(LOCAL_STORAGE_MAPS_KEY, JSON.stringify(updated));
       setMapsList(updated.map(m => ({ id: m.id, title: m.title, updated_at: m.updated_at })));
     }
-  }, [activeMapId, mapsList, user, switchMap, getLocalMaps]);
+  }, [activeMapId, mapsList, user, switchMap, getLocalMaps, getValidToken]);
 
   // --- Rename Map ---
   const renameMap = useCallback(async (id: string, newTitle: string) => {
     if (newTitle.trim() === '') return;
     const timeString = new Date().toISOString();
+    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
 
-    if (supabase && user) {
+    if (isConnected) {
       setIsSyncing(true);
       try {
-        const { error } = await supabase
-          .from('mindsprouts_mindmaps')
-          .update({
-            title: newTitle,
-            updated_at: timeString
-          })
-          .eq('id', id)
-          .eq('user_id', user.id);
-
-        if (error) throw error;
+        const token = await getValidToken();
+        await googleDriveClient.renameSproutFile(token, id, newTitle);
         
         setMapsList((prev) =>
           prev.map((m) => (m.id === id ? { ...m, title: newTitle, updated_at: timeString } : m))
@@ -655,7 +778,7 @@ export const useMindMap = () => {
           setTree((prev) => ({ ...prev, text: newTitle }));
         }
       } catch (err) {
-        console.error('Failed to rename map in Supabase:', err);
+        console.error('Failed to rename map in Google Drive:', err);
       } finally {
         setIsSyncing(false);
       }
@@ -682,7 +805,7 @@ export const useMindMap = () => {
         setTree((prev) => ({ ...prev, text: newTitle }));
       }
     }
-  }, [user, activeMapId, getLocalMaps]);
+  }, [user, activeMapId, getLocalMaps, getValidToken]);
 
   // --- Undo & Redo ---
   const undo = useCallback(() => {
@@ -898,39 +1021,37 @@ export const useMindMap = () => {
     const migrated = migrateTree(sanitized);
     const title = migrated.text || '匯入的心智圖';
     const timeString = new Date().toISOString();
+    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
 
-    if (supabase && user) {
+    if (isConnected) {
       setIsSyncing(true);
       try {
-        const { data, error } = await supabase
-          .from('mindsprouts_mindmaps')
-          .insert({
-            title,
-            content: migrated, // Use the imported migrated tree as the initial content
-            user_id: user.id
-          })
-          .select()
-          .single();
+        const token = await getValidToken();
+        const folderId = localStorage.getItem('google_folder_id') || googleFolderId;
+        if (!folderId) throw new Error('Google Folder ID not set');
 
-        if (error) throw error;
-        if (data) {
-          setMapsList((prev) => [{ id: data.id, title: data.title, updated_at: data.updated_at }, ...prev]);
-          setActiveMapId(data.id);
-          localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, data.id);
-          
-          // Instantly set states to prevent loading delay
-          setTree(migrated);
-          setHistory({
-            past: [],
-            present: migrated,
-            future: []
-          });
-          setSelectedId('root');
-          setEditingId(null);
-          setTimeout(() => centerCanvas(), 100);
-        }
+        const fileId = await googleDriveClient.createSproutFile(token, folderId, title, {
+          id: '',
+          title,
+          content: migrated
+        });
+
+        setMapsList((prev) => [{ id: fileId, title, updated_at: timeString }, ...prev]);
+        setActiveMapId(fileId);
+        localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, fileId);
+        
+        // Instantly set states to prevent loading delay
+        setTree(migrated);
+        setHistory({
+          past: [],
+          present: migrated,
+          future: []
+        });
+        setSelectedId('root');
+        setEditingId(null);
+        setTimeout(() => centerCanvas(), 100);
       } catch (err) {
-        console.error('Failed to import map in Supabase:', err);
+        console.error('Failed to import map to Google Drive:', err);
         alert('匯入心智圖失敗！');
       } finally {
         setIsSyncing(false);
@@ -963,7 +1084,7 @@ export const useMindMap = () => {
       setEditingId(null);
       setTimeout(() => centerCanvas(), 100);
     }
-  }, [user, getLocalMaps, centerCanvas]);
+  }, [user, getLocalMaps, centerCanvas, getValidToken, googleFolderId]);
 
   // --- Drag Operations ---
   const updateNodeOffsetSilent = useCallback((targetId: string, offset: { x: number; y: number } | undefined) => {
@@ -1159,29 +1280,15 @@ export const useMindMap = () => {
 
   // --- Auth Operations ---
   const loginWithGoogle = async () => {
-    if (!supabase) return;
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
-      if (error) throw error;
-    } catch (err) {
-      console.error('Failed to log in with Google:', err);
+    if (tokenClientRef.current) {
+      tokenClientRef.current.requestAccessToken();
+    } else {
+      console.error('Google client not initialized yet');
     }
   };
 
   const logout = async () => {
-    if (!supabase) return;
-    try {
-      await supabase.auth.signOut();
-      setActiveMapId('default-map');
-      localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, 'default-map');
-    } catch (err) {
-      console.error('Failed to log out:', err);
-    }
+    logoutGoogle();
   };
 
   const reorderMapsList = useCallback((startIndex: number, endIndex: number) => {
@@ -1193,8 +1300,8 @@ export const useMindMap = () => {
       const orderIds = result.map(m => m.id);
       localStorage.setItem('mindsprout_maps_order', JSON.stringify(orderIds));
       
-      // If in Local mode, also update the actual map order in LOCAL_STORAGE_MAPS_KEY
-      if (!supabase || !user) {
+      const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+      if (!isConnected) {
         const localMaps = getLocalMaps();
         const newLocalMaps = orderIds.map(id => localMaps.find(m => m.id === id)).filter(Boolean);
         localStorage.setItem(LOCAL_STORAGE_MAPS_KEY, JSON.stringify(newLocalMaps));
@@ -1202,7 +1309,7 @@ export const useMindMap = () => {
       
       return result;
     });
-  }, [supabase, user, getLocalMaps]);
+  }, [getLocalMaps]);
 
   return {
     tree,
@@ -1258,6 +1365,7 @@ export const useMindMap = () => {
     updateSummaryRange,
     deleteSummary,
     reorderMapsList,
-    isSupabaseConfigured: isSupabaseConfigured()
+    isGoogleDriveConfigured: !!import.meta.env.VITE_GOOGLE_CLIENT_ID,
+    isSupabaseConfigured: !!import.meta.env.VITE_GOOGLE_CLIENT_ID
   };
 };

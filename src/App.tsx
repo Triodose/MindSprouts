@@ -207,7 +207,7 @@ export default function App() {
     updateSummaryRange,
     deleteSummary,
     reorderMapsList,
-    isSupabaseConfigured
+    isGoogleDriveConfigured
   } = useMindMap();
 
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
@@ -749,7 +749,7 @@ export default function App() {
         theme={theme}
         user={user}
         isSyncing={isSyncing}
-        isSupabaseConfigured={isSupabaseConfigured}
+        isGoogleDriveConfigured={isGoogleDriveConfigured}
         isAutoLayout={isAutoLayout}
         onToggleAutoLayout={toggleAutoLayout}
         onUpdateStyle={updateNodeStyle}

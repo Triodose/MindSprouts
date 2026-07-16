@@ -11,7 +11,7 @@ interface InspectorProps {
   theme: MindMapTheme;
   user: any;
   isSyncing: boolean;
-  isSupabaseConfigured: boolean;
+  isGoogleDriveConfigured: boolean;
   isAutoLayout: boolean;
   onToggleAutoLayout: (active: boolean) => void;
   onUpdateStyle: (id: string, style: Partial<MindMapNode['style']>) => void;
@@ -85,7 +85,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   theme,
   user,
   isSyncing,
-  isSupabaseConfigured,
+  isGoogleDriveConfigured,
   isAutoLayout,
   onToggleAutoLayout,
   onUpdateStyle,
@@ -1250,13 +1250,13 @@ export const Inspector: React.FC<InspectorProps> = ({
         )}
       </div>
 
-      {/* 3. Supabase Auth Integration */}
+      {/* 3. Google Drive Auth Integration */}
       <div className="inspector-section" style={{ borderTop: '1px solid var(--theme-glass-border)', paddingTop: '20px', marginBottom: 0 }}>
         <div className="inspector-title">雲端同步狀態</div>
         <div className="auth-panel">
-          {!isSupabaseConfigured ? (
+          {!isGoogleDriveConfigured ? (
             <div className="db-status-pill db-status-offline" style={{ alignSelf: 'start', marginBottom: '8px' }}>
-              <CloudOff size={14} /> 本地儲存模式 (未設定 API)
+              <CloudOff size={14} /> 本地儲存模式 (未設定 Google API)
             </div>
           ) : user ? (
             <>
@@ -1279,7 +1279,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                     </>
                   ) : (
                     <>
-                      <Cloud size={14} /> 已連線至雲端
+                      <Cloud size={14} /> 已連線至雲端硬碟
                     </>
                   )}
                 </div>
@@ -1291,10 +1291,10 @@ export const Inspector: React.FC<InspectorProps> = ({
           ) : (
             <>
               <div style={{ fontSize: '12px', opacity: 0.7, marginBottom: '8px' }}>
-                登入帳號以啟用即時雲端儲存與跨裝置同步。
+                連結 Google 帳號以啟用即時雲端硬碟同步與備份。
               </div>
               <button className="btn-primary" onClick={onLogin}>
-                <LogIn size={14} /> 使用 Google 登入
+                <LogIn size={14} /> 連結 Google 雲端硬碟
               </button>
             </>
           )}
