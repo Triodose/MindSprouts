@@ -7,6 +7,7 @@ export interface NodeStyle {
   fontWeight?: string;
   shape?: 'rounded' | 'rectangle' | 'underlined' | 'diamond' | 'circle';
   structure?: 'logic' | 'org' | 'mindmap' | 'logic-left' | 'tree' | 'brace' | 'timeline' | 'fishbone';
+  lineStyle?: 'curve' | 'straight' | 'tapered';
 }
 
 export interface Relationship {
@@ -40,6 +41,10 @@ export interface MindMapNode {
   boundary?: BoundaryStyle;
   themeId?: string; // Theme selection saved at root node level
   summaries?: MindMapSummary[];
+  flag?: string;
+  link?: string;
+  image?: string;
+  levelStyles?: Record<number, NodeStyle>;
 }
 
 export interface MindMapSummary {
@@ -94,6 +99,10 @@ export interface MindMapTheme {
   glassBackground: string;          // Deprecated/UI fallback
   glassBorder: string;              // Deprecated/UI fallback
   branchColors?: string[];          // Rainbow line colors
+  levelBackgrounds?: string[];      // Background fill colors for level 0, 1, 2, 3, 4+
+  levelColors?: string[];           // Text colors for level 0, 1, 2, 3, 4+
+  levelBorders?: string[];          // Border colors for level 0, 1, 2, 3, 4+
+  isFilledTheme?: boolean;          // Flag to indicate background is filled
 }
 
 export interface HistoryState {

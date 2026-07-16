@@ -99,38 +99,154 @@ export const parseMarkdownToTree = (markdownText: string): MindMapNode | null =>
 
 // Export canvas layout as PNG image
 export const exportToPng = async (element: HTMLElement, title: string) => {
+  console.log('exportToPng called with element:', element, 'title:', title);
   try {
-    // Temporarily reset zoom and pan for capturing full tree correctly
-    const originalTransform = element.style.transform;
-    element.style.transform = 'none';
+    const realApp = element.closest('.mindmap-app') as HTMLElement;
+    const themeBg = realApp ? window.getComputedStyle(realApp).backgroundColor : '#1d2731';
+    console.log('themeBg:', themeBg);
 
-    // Find bounding box of all elements in the tree
-    const rect = element.getBoundingClientRect();
+    // Find the canvas-transform element that has the zoom/pan transform
+    const transformEl = element.closest('.canvas-transform') as HTMLElement;
+    const originalTransform = transformEl ? transformEl.style.transform : '';
+    console.log('originalTransform:', originalTransform);
+
+    // 1. Temporarily clear transform on the parent canvas-transform so we get accurate unscaled layout coordinates
+    if (transformEl) {
+      transformEl.style.transform = 'none';
+    }
+
+    const nodeCards = element.querySelectorAll('.node-card');
+    console.log('Found node cards count:', nodeCards.length);
     
-    const canvas = await html2canvas(element, {
-      backgroundColor: 'transparent',
-      logging: false,
-      useCORS: true,
-      scale: 2, // Double resolution for premium sharpness
-      width: rect.width + 100, // Add padding
-      height: rect.height + 100,
-      x: rect.left - 50,
-      y: rect.top - 50
+    const containerRect = element.getBoundingClientRect();
+    
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    nodeCards.forEach((card) => {
+      const cardRect = card.getBoundingClientRect();
+      // Coordinates relative to .tree-container (element)
+      const x1 = cardRect.left - containerRect.left;
+      const x2 = cardRect.right - containerRect.left;
+      const y1 = cardRect.top - containerRect.top;
+      const y2 = cardRect.bottom - containerRect.top;
+
+      if (x1 < minX) minX = x1;
+      if (x2 > maxX) maxX = x2;
+      if (y1 < minY) minY = y1;
+      if (y2 > maxY) maxY = y2;
     });
 
-    // Restore original transform
-    element.style.transform = originalTransform;
+    console.log('Bounding box computed:', { minX, maxX, minY, maxY });
 
-    const imgData = canvas.toDataURL('image/png');
-    const downloadAnchor = document.createElement('a');
-    const filename = `${title.replace(/\s+/g, '_')}_mindmap.png`;
-    downloadAnchor.setAttribute('href', imgData);
-    downloadAnchor.setAttribute('download', filename);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+    // Restore original transform immediately
+    if (transformEl) {
+      transformEl.style.transform = originalTransform;
+    }
+
+    // Fallback if no nodes are detected
+    if (nodeCards.length === 0 || minX === Infinity) {
+      console.log('Fallback triggered: no nodes detected.');
+      const canvas = await html2canvas(element, {
+        backgroundColor: themeBg,
+        logging: true,
+        useCORS: true,
+        scale: 2,
+        onclone: (clonedDoc) => {
+          if (realApp) {
+            clonedDoc.body.style.cssText = realApp.style.cssText;
+            clonedDoc.body.style.backgroundColor = themeBg;
+            clonedDoc.body.style.color = window.getComputedStyle(realApp).color;
+          }
+        }
+      });
+      triggerDownload(canvas, title);
+      return;
+    }
+
+    // Add a 60px padding around the mindmap boundaries
+    const padding = 60;
+    const captureWidth = (maxX - minX) + padding * 2;
+    const captureHeight = (maxY - minY) + padding * 2;
+    const offsetX = -minX + padding;
+    const offsetY = -minY + padding;
+
+    console.log('Capture bounds:', { captureWidth, captureHeight, offsetX, offsetY });
+
+    // 2. Capture using html2canvas by shifting positioning to absolute left/top in cloned elements
+    console.log('Starting html2canvas capture...');
+    const canvas = await html2canvas(element, {
+      backgroundColor: themeBg,
+      logging: true, // Enable html2canvas internal logs for debugging
+      useCORS: true,
+      scale: 2,
+      onclone: (clonedDoc, clonedEl) => {
+        console.log('html2canvas onclone callback triggered.');
+        // clonedEl is the cloned tree-container (since it is the root target element)
+        const clonedContainer = (clonedEl as HTMLElement) || (clonedDoc.querySelector('.tree-container') as HTMLElement);
+        if (!clonedContainer) {
+          console.warn('Cloned root tree-container not found in clone!');
+          return;
+        }
+        
+        if (realApp) {
+          // Set all variables and backgrounds on the cloned body so they inherit down
+          clonedDoc.body.style.cssText = realApp.style.cssText;
+          clonedDoc.body.style.backgroundColor = themeBg;
+          clonedDoc.body.style.color = window.getComputedStyle(realApp).color;
+
+          // Force the cloned container to match the exact cropped mindmap dimensions
+          clonedContainer.style.width = `${captureWidth}px`;
+          clonedContainer.style.height = `${captureHeight}px`;
+          clonedContainer.style.position = 'relative';
+          clonedContainer.style.overflow = 'hidden';
+          clonedContainer.style.backgroundColor = themeBg;
+
+          // Shift all direct absolute children (nodes & SVGs) to center inside clonedContainer
+          const children = Array.from(clonedContainer.children) as HTMLElement[];
+          children.forEach((child) => {
+            if (child.classList.contains('svg-connections')) {
+              // Set explicit pixel dimensions and viewBox mapping on the SVG element to prevent html2canvas layout bugs and clipping
+              const clonedSvg = child as unknown as SVGElement;
+              clonedSvg.setAttribute('width', captureWidth.toString());
+              clonedSvg.setAttribute('height', captureHeight.toString());
+              clonedSvg.setAttribute('viewBox', `${minX - padding} ${minY - padding} ${captureWidth} ${captureHeight}`);
+              clonedSvg.style.width = `${captureWidth}px`;
+              clonedSvg.style.height = `${captureHeight}px`;
+              clonedSvg.style.left = '0px';
+              clonedSvg.style.top = '0px';
+              clonedSvg.style.position = 'absolute';
+            } else {
+              // Shift normal HTML node branches and summary trees
+              const originalLeft = parseFloat(child.style.left) || 0;
+              const originalTop = parseFloat(child.style.top) || 0;
+              child.style.left = `${originalLeft + offsetX}px`;
+              child.style.top = `${originalTop + offsetY}px`;
+            }
+          });
+          
+          console.log('onclone styling, SVG viewBox mapping, and offsets successfully applied.');
+        }
+      }
+    });
+
+    console.log('html2canvas rendering completed successfully. Canvas size:', canvas.width, 'x', canvas.height);
+    triggerDownload(canvas, title);
   } catch (err) {
     console.error('Failed to export image:', err);
-    alert('匯出圖片時發生錯誤，請重試。');
+    alert('匯出圖片時發生錯誤：' + (err as Error).message);
   }
+};
+
+const triggerDownload = (canvas: HTMLCanvasElement, title: string) => {
+  const imgData = canvas.toDataURL('image/png');
+  const downloadAnchor = document.createElement('a');
+  const filename = `${title.replace(/\s+/g, '_')}_mindmap.png`;
+  downloadAnchor.setAttribute('href', imgData);
+  downloadAnchor.setAttribute('download', filename);
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
 };

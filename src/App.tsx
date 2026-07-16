@@ -10,6 +10,147 @@ import { Outliner } from './components/Outliner';
 import { findNode } from './utils/treeUtils';
 import { navigateLeft, navigateRight, navigateVertical } from './utils/treeNavigation';
 import type { SummaryPosition } from './types/mindmap';
+import { StickyNote } from 'lucide-react';
+
+interface NotePopoverProps {
+  nodeId: string;
+  initialNote: string;
+  onSave: (text: string) => void;
+  onClose: () => void;
+}
+
+const NotePopover: React.FC<NotePopoverProps> = ({ nodeId, initialNote, onSave, onClose }) => {
+  const [text, setText] = useState(initialNote);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  const updatePosition = () => {
+    const el = document.querySelector(`[data-node-id="${nodeId}"]`);
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      setPos({
+        top: rect.bottom + window.scrollY + 10,
+        left: rect.left + window.scrollX + rect.width / 2
+      });
+    }
+  };
+
+  useEffect(() => {
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    const container = document.querySelector('.tree-container');
+    if (container) {
+      container.addEventListener('scroll', updatePosition);
+    }
+    
+    let animFrameId: number;
+    const loop = () => {
+      updatePosition();
+      animFrameId = requestAnimationFrame(loop);
+    };
+    animFrameId = requestAnimationFrame(loop);
+
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      if (container) {
+        container.removeEventListener('scroll', updatePosition);
+      }
+      cancelAnimationFrame(animFrameId);
+    };
+  }, [nodeId]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const toolbarNoteBtn = document.querySelector('.toolbar-note-btn');
+      if (toolbarNoteBtn?.contains(e.target as Node)) {
+        return;
+      }
+      const noteIndicator = (e.target as HTMLElement).closest('.node-note-indicator');
+      if (noteIndicator) {
+        return;
+      }
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside, true);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside, true);
+    };
+  }, [onClose]);
+
+  const handleChange = (newText: string) => {
+    setText(newText);
+    onSave(newText);
+  };
+
+  if (!pos) return null;
+
+  return (
+    <div
+      ref={popoverRef}
+      className="glass-panel note-popover-editor"
+      style={{
+        position: 'absolute',
+        top: `${pos.top}px`,
+        left: `${pos.left}px`,
+        transform: 'translateX(-50%)',
+        width: '280px',
+        padding: '12px',
+        borderRadius: '8px',
+        zIndex: 1100,
+        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3)',
+        border: '1px solid var(--theme-glass-border)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        animation: 'fadeInUp 0.15s ease-out'
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: '11px', fontWeight: 600, opacity: 0.8, display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <StickyNote size={12} /> 編輯備註
+        </span>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--theme-text-color)',
+            opacity: 0.6,
+            cursor: 'pointer',
+            fontSize: '14px',
+            lineHeight: 1,
+            padding: '2px'
+          }}
+          title="關閉"
+        >
+          ✕
+        </button>
+      </div>
+      <textarea
+        value={text}
+        onChange={(e) => handleChange(e.target.value)}
+        placeholder="輸入此主題的備註內容..."
+        style={{
+          width: '100%',
+          height: '90px',
+          background: 'rgba(255, 255, 255, 0.05)',
+          border: '1px solid var(--theme-glass-border)',
+          borderRadius: '4px',
+          padding: '8px',
+          color: 'var(--theme-text-color)',
+          fontSize: '12px',
+          resize: 'none',
+          outline: 'none',
+          fontFamily: 'inherit',
+          boxSizing: 'border-box'
+        }}
+        autoFocus
+      />
+    </div>
+  );
+};
 
 export default function App() {
   const {
@@ -65,11 +206,13 @@ export default function App() {
     addSummary,
     updateSummaryRange,
     deleteSummary,
+    reorderMapsList,
     isSupabaseConfigured
   } = useMindMap();
 
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
+  const [activeNoteNodeId, setActiveNoteNodeId] = useState<string | null>(null);
   const [summaryPositions, setSummaryPositions] = useState<SummaryPosition[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -307,6 +450,20 @@ export default function App() {
   // Find selected node detail to pass to Inspector
   const selectedNodeDetail = selectedId ? findNode(tree, selectedId) : null;
 
+  const handleOpenNoteEditor = (nodeId: string) => {
+    setActiveNoteNodeId(nodeId);
+  };
+
+  const handleToolbarAddNote = () => {
+    if (selectedId) {
+      if (activeNoteNodeId === selectedId) {
+        setActiveNoteNodeId(null);
+      } else {
+        setActiveNoteNodeId(selectedId);
+      }
+    }
+  };
+
   // UI Theme styling values
   const uiStyles = uiTheme === 'light' ? {
     textColor: '#1e293b', // slate-800
@@ -323,7 +480,7 @@ export default function App() {
   };
 
   // Build root inline theme styles mapping CSS Variables
-  const appStyles: React.CSSProperties = {
+  const appStyles: any = {
     // Canvas background
     '--theme-background': theme.background,
     
@@ -336,7 +493,17 @@ export default function App() {
     '--theme-node-default-background': theme.nodeDefaultBackground,
     '--theme-node-default-color': theme.nodeDefaultColor,
     '--theme-node-default-border': theme.nodeDefaultBorder,
-    
+  };
+
+  // Populate level-specific CSS variables (up to level 4, clamped at 4+)
+  for (let i = 0; i <= 4; i++) {
+    appStyles[`--theme-level-${i}-background`] = (theme.levelBackgrounds && theme.levelBackgrounds[i]) || (i === 0 ? theme.rootBackground : theme.nodeDefaultBackground);
+    appStyles[`--theme-level-${i}-color`] = (theme.levelColors && theme.levelColors[i]) || (i === 0 ? theme.rootColor : theme.nodeDefaultColor);
+    appStyles[`--theme-level-${i}-border`] = (theme.levelBorders && theme.levelBorders[i]) || (i === 0 ? theme.rootBorder : theme.nodeDefaultBorder);
+  }
+
+  // Add the remaining properties to appStyles
+  Object.assign(appStyles, {
     // Connections / branches defaults
     '--theme-line-color': theme.lineColor,
     
@@ -356,7 +523,10 @@ export default function App() {
     '--theme-ui-accent-color': uiStyles.uiAccentColor,
 
     background: theme.background
-  } as React.CSSProperties;
+  });
+
+  const rootNode = tree.children.find((c) => c.id === 'root');
+  const isTimelineMode = rootNode?.style?.structure === 'timeline';
 
   return (
     <div className="mindmap-app" style={appStyles}>
@@ -445,7 +615,10 @@ export default function App() {
                       onReparent={reparentNode}
                       onReorder={reorderNode}
                       onUpdateData={updateNodeData}
+                      onOpenNoteEditor={handleOpenNoteEditor}
                       isRoot={false}
+                      depth={0}
+                      theme={theme}
                     />
                   </div>
                 );
@@ -472,7 +645,11 @@ export default function App() {
                   onReparent={reparentNode}
                   onReorder={reorderNode}
                   onUpdateData={updateNodeData}
+                  onOpenNoteEditor={handleOpenNoteEditor}
                   isRoot={child.id === 'root'}
+                  depth={0}
+                  theme={theme}
+                  isTimelineMode={isTimelineMode}
                 />
               ))}
             </div>
@@ -535,6 +712,7 @@ export default function App() {
         onCreateNewMap={createNewMap}
         onDeleteMap={deleteMap}
         onRenameMap={renameMap}
+        onReorderMaps={reorderMapsList}
       />
 
       {/* Top Toolbar */}
@@ -558,6 +736,7 @@ export default function App() {
         connectingSourceId={connectingSourceId}
         onStartConnection={startConnection}
         onCancelConnection={cancelConnection}
+        onAddNoteClick={handleToolbarAddNote}
         uiTheme={uiTheme}
         onToggleUiTheme={toggleUiTheme}
       />
@@ -589,6 +768,18 @@ export default function App() {
         isOpen={isShortcutsOpen}
         onClose={() => setIsShortcutsOpen(false)}
       />
+
+      {/* Floating Note Editor Popover */}
+      {activeNoteNodeId && (
+        <NotePopover
+          nodeId={activeNoteNodeId}
+          initialNote={findNode(tree, activeNoteNodeId)?.note || ''}
+          onSave={(text) => {
+            updateNodeData(activeNoteNodeId, { note: text || undefined });
+          }}
+          onClose={() => setActiveNoteNodeId(null)}
+        />
+      )}
     </div>
   );
 }

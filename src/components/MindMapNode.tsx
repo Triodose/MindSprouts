@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StickyNote } from 'lucide-react';
-import type { MindMapNode as MindMapNodeType } from '../types/mindmap';
+import { Globe, Flag, Star, Heart, HelpCircle, Info, List } from 'lucide-react';
+import type { MindMapNode as MindMapNodeType, MindMapTheme } from '../types/mindmap';
 
 interface MindMapNodeProps {
   node: MindMapNodeType;
@@ -21,29 +21,85 @@ interface MindMapNodeProps {
   onReparent: (nodeId: string, newParentId: string) => void;
   onReorder: (nodeId: string, targetId: string, position: 'before' | 'after') => void;
   onUpdateData: (id: string, data: Partial<MindMapNodeType>) => void;
+  onOpenNoteEditor?: (nodeId: string) => void;
   isRoot?: boolean;
+  depth?: number;
+  inheritedStructure?: string;
+  theme: MindMapTheme;
+  branchIndex?: number;
+  isTimelineMode?: boolean;
+  extraMarginLeft?: number;
 }
 
 const renderProgressSvg = (progress: number) => {
-  const radius = 6;
-  const circumference = 2 * Math.PI * radius; // ~37.7
+  const radius = 3;
+  const circumference = 2 * Math.PI * radius; // ~18.85
   const strokeDashoffset = circumference - (progress / 100) * circumference;
+
+  if (progress === 100) {
+    return (
+      <svg width="16" height="16" className="progress-svg" viewBox="0 0 16 16" style={{ display: 'block' }}>
+        <circle cx="8" cy="8" r="7" fill="currentColor" />
+        <path
+          d="M5 8 l2 2 l4 -4"
+          fill="none"
+          stroke="#ffffff"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
   return (
-    <svg width="16" height="16" className="progress-svg" style={{ display: 'block' }}>
-      <circle cx="8" cy="8" r={radius} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" />
-      <circle
-        cx="8"
-        cy="8"
-        r={radius}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeDasharray={circumference}
-        strokeDashoffset={strokeDashoffset}
-        transform="rotate(-90 8 8)"
-      />
+    <svg width="16" height="16" className="progress-svg" viewBox="0 0 16 16" style={{ display: 'block' }}>
+      {/* Outer border and white fill */}
+      <circle cx="8" cy="8" r="6" fill="#ffffff" stroke="currentColor" strokeWidth="1.5" />
+      {/* Pie slice progress */}
+      {progress > 0 && (
+        <circle
+          cx="8"
+          cy="8"
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="6"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          transform="rotate(-90 8 8)"
+        />
+      )}
     </svg>
   );
+};
+
+const renderFlagIcon = (flagKey: string) => {
+  const size = 13;
+  switch (flagKey) {
+    case 'red-flag':
+      return <span className="node-badge-flag flag-red" title="紅色標記"><Flag size={size} fill="currentColor" /></span>;
+    case 'orange-flag':
+      return <span className="node-badge-flag flag-orange" title="橘色標記"><Flag size={size} fill="currentColor" /></span>;
+    case 'yellow-flag':
+      return <span className="node-badge-flag flag-yellow" title="黃色標記"><Flag size={size} fill="currentColor" /></span>;
+    case 'green-flag':
+      return <span className="node-badge-flag flag-green" title="綠色標記"><Flag size={size} fill="currentColor" /></span>;
+    case 'blue-flag':
+      return <span className="node-badge-flag flag-blue" title="藍色標記"><Flag size={size} fill="currentColor" /></span>;
+    case 'purple-flag':
+      return <span className="node-badge-flag flag-purple" title="紫色標記"><Flag size={size} fill="currentColor" /></span>;
+    case 'star':
+      return <span className="node-badge-flag flag-star" title="重要星星"><Star size={size} fill="currentColor" /></span>;
+    case 'heart':
+      return <span className="node-badge-flag flag-heart" title="喜愛心形"><Heart size={size} fill="currentColor" /></span>;
+    case 'question':
+      return <span className="node-badge-flag flag-question" title="待確認問號"><HelpCircle size={size} /></span>;
+    case 'info':
+      return <span className="node-badge-flag flag-info" title="提示資訊"><Info size={size} /></span>;
+    default:
+      return null;
+  }
 };
 
 const resolveColor = (colorStr: string): string => {
@@ -85,6 +141,123 @@ const getDiamondBorderImage = (
   return `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 100 100' preserveAspectRatio='none'%3e%3cpolygon points='50,3.5 96.5,50 50,96.5 3.5,50' fill='${escapedBg}' stroke='${escapedBorder}' stroke-width='${strokeWidth}' vector-effect='non-scaling-stroke' ${dashes}/%3e%3c/svg%3e")`;
 };
 
+const lightenColor = (hexColor: string, percent: number): string => {
+  const hex = hexColor.replace('#', '');
+  if (hex.length !== 6) return hexColor;
+  let r = parseInt(hex.substring(0, 2), 16);
+  let g = parseInt(hex.substring(2, 4), 16);
+  let b = parseInt(hex.substring(4, 6), 16);
+
+  r = Math.min(255, Math.floor(r + (255 - r) * percent));
+  g = Math.min(255, Math.floor(g + (255 - g) * percent));
+  b = Math.min(255, Math.floor(b + (255 - b) * percent));
+
+  const rHex = r.toString(16).padStart(2, '0');
+  const gHex = g.toString(16).padStart(2, '0');
+  const bHex = b.toString(16).padStart(2, '0');
+
+  return `#${rHex}${gHex}${bHex}`;
+};
+
+const getContrastColor = (hexColor: string): string => {
+  const hex = hexColor.replace('#', '');
+  if (hex.length !== 6) return '#1e293b';
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+  return (yiq >= 140) ? '#1e293b' : '#ffffff';
+};
+
+const getNodeColors = (
+  theme: MindMapTheme,
+  branchIndex: number | undefined,
+  depth: number,
+  isRoot: boolean
+): { backgroundColor: string; borderColor: string; color: string } => {
+  const levelIndex = Math.min(depth || 0, 4);
+
+  // If root node
+  if (isRoot || depth === 0) {
+    return {
+      backgroundColor: theme.rootBackground,
+      borderColor: theme.rootBorder,
+      color: theme.rootColor
+    };
+  }
+
+  // If there are branch colors and branchIndex is defined, use branch color
+  if (theme.branchColors && theme.branchColors.length > 0 && branchIndex !== undefined) {
+    const baseColor = theme.branchColors[branchIndex % theme.branchColors.length];
+    
+    let bgColor = baseColor;
+    if (depth === 2) {
+      bgColor = lightenColor(baseColor, 0.35);
+    } else if (depth === 3) {
+      bgColor = lightenColor(baseColor, 0.65);
+    } else if (depth >= 4) {
+      bgColor = lightenColor(baseColor, 0.85);
+    }
+
+    return {
+      backgroundColor: bgColor,
+      borderColor: bgColor,
+      color: getContrastColor(bgColor)
+    };
+  }
+
+  // Fallback to standard theme levels
+  return {
+    backgroundColor: (theme.levelBackgrounds && theme.levelBackgrounds[levelIndex]) || theme.nodeDefaultBackground,
+    borderColor: (theme.levelBorders && theme.levelBorders[levelIndex]) || theme.nodeDefaultBorder,
+    color: (theme.levelColors && theme.levelColors[levelIndex]) || theme.nodeDefaultColor
+  };
+};
+
+const estimateNodeWidth = (node: MindMapNodeType): number => {
+  const textLen = node.text || '';
+  let estimatedTextWidth = 0;
+  for (let i = 0; i < textLen.length; i++) {
+    const code = textLen.charCodeAt(i);
+    if (code >= 0x4e00 && code <= 0x9fff) {
+      estimatedTextWidth += 14; // CJK character width
+    } else {
+      estimatedTextWidth += 8.5; // English character width
+    }
+  }
+  let w = estimatedTextWidth + 36;
+  if (node.progress !== undefined) w += 24;
+  if (node.priority) w += 24;
+  if (node.flag) w += 24;
+  return Math.max(100, Math.min(300, w));
+};
+
+const calculateSubTreeWidth = (node: MindMapNodeType): number => {
+  const nodeW = estimateNodeWidth(node);
+  if (!node.children || node.children.length === 0 || node.isCollapsed) {
+    return nodeW;
+  }
+  let maxChildW = 0;
+  node.children.forEach((child) => {
+    const childW = calculateSubTreeWidth(child);
+    if (childW > maxChildW) maxChildW = childW;
+  });
+  return nodeW + 40 + maxChildW; // 40px is horizontal gap between brace layout nodes
+};
+
+const calculateDescendantSpan = (node: MindMapNodeType): number => {
+  const nodeW = estimateNodeWidth(node);
+  if (!node.children || node.children.length === 0 || node.isCollapsed) {
+    return nodeW;
+  }
+  let maxChildW = 0;
+  node.children.forEach((child) => {
+    const childW = calculateSubTreeWidth(child);
+    if (childW > maxChildW) maxChildW = childW;
+  });
+  return (nodeW / 2) + 12 + maxChildW;
+};
+
 export const MindMapNode: React.FC<MindMapNodeProps> = ({
   node,
   parent,
@@ -104,7 +277,14 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   onReparent,
   onReorder,
   onUpdateData,
-  isRoot = false
+  onOpenNoteEditor,
+  isRoot = false,
+  depth = 0,
+  inheritedStructure,
+  theme,
+  branchIndex,
+  isTimelineMode = false,
+  extraMarginLeft
 }) => {
   const isSelected = selectedId === node.id;
   const isEditing = editingId === node.id;
@@ -337,14 +517,16 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
 
   const currentShape = node.style?.shape || 'rounded';
   const currentBorderStyle = node.style?.borderStyle || 'solid';
-  const effectiveBorderColor = node.style?.borderColor || (isRoot ? 'var(--theme-root-border)' : 'var(--theme-node-default-border)');
-  const effectiveBgColor = node.style?.backgroundColor || (isRoot ? 'var(--theme-root-background)' : 'var(--theme-node-default-background)');
+  
+  const resolvedColors = getNodeColors(theme, branchIndex, depth, isRoot);
+  const effectiveBorderColor = node.style?.borderColor || resolvedColors.borderColor;
+  const effectiveBgColor = node.style?.backgroundColor !== undefined ? node.style.backgroundColor : resolvedColors.backgroundColor;
 
   // Build inline styles based on node properties
   const nodeStyles: React.CSSProperties = {
-    color: node.style?.color || (isRoot ? 'var(--theme-root-color)' : 'var(--theme-node-default-color)'),
-    fontSize: node.style?.fontSize || (isRoot ? '18px' : '14px'),
-    fontWeight: node.style?.fontWeight || (isRoot ? '700' : '500'),
+    color: node.style?.color || (effectiveBgColor === 'transparent' ? effectiveBorderColor : resolvedColors.color),
+    fontSize: node.style?.fontSize || (isRoot || depth === 0 ? '22px' : depth === 1 ? '18px' : '14px'),
+    fontWeight: node.style?.fontWeight || (isRoot || depth === 0 ? '700' : depth === 1 ? '600' : '500'),
     '--node-border-color': effectiveBorderColor
   } as React.CSSProperties;
 
@@ -385,17 +567,21 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   }
 
   // Custom branch translation transform style
-  const branchStyle: React.CSSProperties = node.offset ? {
-    transform: `translate(${node.offset.x}px, ${node.offset.y}px)`,
-    position: 'relative'
-  } : {
-    position: 'relative'
+  const branchStyle: React.CSSProperties = {
+    position: 'relative',
+    ...(node.offset ? { transform: `translate(${node.offset.x}px, ${node.offset.y}px)` } : {}),
+    ...(extraMarginLeft ? { marginLeft: `${extraMarginLeft}px` } : {})
   };
 
   const hasChildren = node.children && node.children.length > 0;
   const showChildren = hasChildren && !node.isCollapsed;
 
-  let structure = node.style?.structure || 'logic';
+  let structure = node.style?.structure || inheritedStructure || 'logic';
+  const isTimelineChildNode = parent && parent.style?.structure === 'timeline';
+  if (isTimelineMode && !isRoot && !isTimelineChildNode) {
+    structure = 'brace';
+  }
+  
   if (!isRoot) {
     if (isLeft && structure === 'logic') {
       structure = 'logic-left';
@@ -424,10 +610,16 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   const leftClass = nodeIsLeft ? 'layout-left' : '';
   const boundaryClass = node.boundary ? 'has-boundary' : '';
 
+  const cardDepthClass = (isRoot || depth === 0)
+    ? 'node-card-depth-0'
+    : depth === 1
+      ? 'node-card-depth-1'
+      : 'node-card-depth-2';
+
   const renderNodeCard = () => (
     <div className="node-container">
       <div
-        className={`node-card ${isSelected ? 'selected' : ''} ${shapeClass}`}
+        className={`node-card ${cardDepthClass} ${isSelected ? 'selected' : ''} ${shapeClass}`}
         style={nodeStyles}
         onClick={handleSelect}
         onDoubleClick={handleDoubleClick}
@@ -435,8 +627,23 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
         data-node-id={node.id}
       >
         <div className="node-card-content-wrapper">
+          {/* Embedded Image Preview */}
+          {node.image && (
+            <div className="node-image-preview-container">
+              <img
+                src={node.image}
+                alt="preview"
+                className="node-image-preview"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            </div>
+          )}
+
           {/* Main Row: Badges, Text, Note */}
           <div className="node-card-main-row">
+            {node.flag && renderFlagIcon(node.flag)}
             {node.priority && (
               <span className={`node-badge-priority priority-${node.priority}`} title={`優先級 P${node.priority}`}>
                 {node.priority}
@@ -461,9 +668,31 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
               <span className="node-text">{node.text}</span>
             )}
             {node.note && (
-              <span className="node-note-indicator" title={node.note}>
-                <StickyNote size={13} />
+              <span 
+                className="node-note-indicator" 
+                title={node.note}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenNoteEditor?.(node.id);
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+                style={{ cursor: 'pointer' }}
+              >
+                <List size={14} />
               </span>
+            )}
+            {node.link && (
+              <a
+                href={node.link.startsWith('http') ? node.link : `https://${node.link}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="node-link-icon"
+                title={node.link}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <Globe size={13} />
+              </a>
             )}
           </div>
 
@@ -480,58 +709,18 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
         </div>
 
         {/* Collapse / Expand Badges */}
-        {isRoot && structure === 'mindmap' ? (
-          <>
-            {/* Left side badge */}
-            {node.children.filter((_, idx) => idx % 2 === 0).length > 0 && (
-              <div
-                className={`collapse-badge root-left-badge ${node.isLeftCollapsed ? 'collapsed' : ''}`}
-                onMouseDown={(e) => e.stopPropagation()}
-                onDoubleClick={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleCollapse(node.id, 'left');
-                }}
-                style={{
-                  right: 'auto',
-                  left: '-10px'
-                }}
-              >
-                {node.isLeftCollapsed ? '+' : '-'}
-              </div>
-            )}
-            {/* Right side badge */}
-            {node.children.filter((_, idx) => idx % 2 !== 0).length > 0 && (
-              <div
-                className={`collapse-badge root-right-badge ${node.isRightCollapsed ? 'collapsed' : ''}`}
-                onMouseDown={(e) => e.stopPropagation()}
-                onDoubleClick={(e) => e.stopPropagation()}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleCollapse(node.id, 'right');
-                }}
-                style={{
-                  right: '-10px'
-                }}
-              >
-                {node.isRightCollapsed ? '+' : '-'}
-              </div>
-            )}
-          </>
-        ) : (
-          hasChildren && (
-            <div
-              className={`collapse-badge ${node.isCollapsed ? 'collapsed' : ''}`}
-              onMouseDown={(e) => e.stopPropagation()}
-              onDoubleClick={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleCollapse(node.id);
-              }}
-            >
-              {node.isCollapsed ? '+' : '-'}
-            </div>
-          )
+        {!isRoot && hasChildren && (
+          <div
+            className={`collapse-badge ${node.isCollapsed ? 'collapsed' : ''}`}
+            onMouseDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleCollapse(node.id);
+            }}
+          >
+            {node.isCollapsed ? '+' : '-'}
+          </div>
         )}
       </div>
     </div>
@@ -539,8 +728,8 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
 
   // If node is root and the structure is mindmap, split children left/right
   if (isRoot && structure === 'mindmap') {
-    const leftChildren = node.children.filter((_, idx) => idx % 2 === 0);
-    const rightChildren = node.children.filter((_, idx) => idx % 2 !== 0);
+    const leftChildren = node.children.filter((_, idx) => idx % 2 !== 0);
+    const rightChildren = node.children.filter((_, idx) => idx % 2 === 0);
     const showLeft = !node.isLeftCollapsed;
     const showRight = !node.isRightCollapsed;
 
@@ -550,30 +739,38 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           {/* Left sub-branches */}
           {showLeft && leftChildren.length > 0 && (
             <div className="tree-children layout-left">
-              {leftChildren.map((child) => (
-                <MindMapNode
-                  key={child.id}
-                  node={child}
-                  parent={node}
-                  selectedId={selectedId}
-                  editingId={editingId}
-                  zoom={zoom}
-                  isAutoLayout={isAutoLayout}
-                  isTopLevel={false}
-                  isLeft={true}
-                  onSelect={onSelect}
-                  onStartEdit={onStartEdit}
-                  onEndEdit={onEndEdit}
-                  onUpdateText={onUpdateText}
-                  onToggleCollapse={onToggleCollapse}
-                  onUpdateOffset={onUpdateOffset}
-                  onEndDrag={onEndDrag}
-                  onReparent={onReparent}
-                  onReorder={onReorder}
-                  onUpdateData={onUpdateData}
-                  isRoot={false}
-                />
-              ))}
+              {leftChildren.map((child) => {
+                const idx = node.children.findIndex((c) => c.id === child.id);
+                return (
+                  <MindMapNode
+                    key={child.id}
+                    node={child}
+                    parent={node}
+                    selectedId={selectedId}
+                    editingId={editingId}
+                    zoom={zoom}
+                    isAutoLayout={isAutoLayout}
+                    isTopLevel={false}
+                    isLeft={true}
+                    onSelect={onSelect}
+                    onStartEdit={onStartEdit}
+                    onEndEdit={onEndEdit}
+                    onUpdateText={onUpdateText}
+                    onToggleCollapse={onToggleCollapse}
+                    onUpdateOffset={onUpdateOffset}
+                    onEndDrag={onEndDrag}
+                    onReparent={onReparent}
+                    onReorder={onReorder}
+                    onUpdateData={onUpdateData}
+                    onOpenNoteEditor={onOpenNoteEditor}
+                    isRoot={false}
+                    depth={depth + 1}
+                    inheritedStructure={structure}
+                    theme={theme}
+                    branchIndex={idx}
+                  />
+                );
+              })}
             </div>
           )}
 
@@ -583,30 +780,38 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
           {/* Right sub-branches */}
           {showRight && rightChildren.length > 0 && (
             <div className="tree-children layout-right">
-              {rightChildren.map((child) => (
-                <MindMapNode
-                  key={child.id}
-                  node={child}
-                  parent={node}
-                  selectedId={selectedId}
-                  editingId={editingId}
-                  zoom={zoom}
-                  isAutoLayout={isAutoLayout}
-                  isTopLevel={false}
-                  isLeft={false}
-                  onSelect={onSelect}
-                  onStartEdit={onStartEdit}
-                  onEndEdit={onEndEdit}
-                  onUpdateText={onUpdateText}
-                  onToggleCollapse={onToggleCollapse}
-                  onUpdateOffset={onUpdateOffset}
-                  onEndDrag={onEndDrag}
-                  onReparent={onReparent}
-                  onReorder={onReorder}
-                  onUpdateData={onUpdateData}
-                  isRoot={false}
-                />
-              ))}
+              {rightChildren.map((child) => {
+                const idx = node.children.findIndex((c) => c.id === child.id);
+                return (
+                  <MindMapNode
+                    key={child.id}
+                    node={child}
+                    parent={node}
+                    selectedId={selectedId}
+                    editingId={editingId}
+                    zoom={zoom}
+                    isAutoLayout={isAutoLayout}
+                    isTopLevel={false}
+                    isLeft={false}
+                    onSelect={onSelect}
+                    onStartEdit={onStartEdit}
+                    onEndEdit={onEndEdit}
+                    onUpdateText={onUpdateText}
+                    onToggleCollapse={onToggleCollapse}
+                    onUpdateOffset={onUpdateOffset}
+                    onEndDrag={onEndDrag}
+                    onReparent={onReparent}
+                    onReorder={onReorder}
+                    onUpdateData={onUpdateData}
+                    onOpenNoteEditor={onOpenNoteEditor}
+                    isRoot={false}
+                    depth={depth + 1}
+                    inheritedStructure={structure}
+                    theme={theme}
+                    branchIndex={idx}
+                  />
+                );
+              })}
             </div>
           )}
         </div>
@@ -623,30 +828,69 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
         {/* Recursive Children rendering */}
         {showChildren && (
           <div className="tree-children">
-            {node.children.map((child) => (
-              <MindMapNode
-                key={child.id}
-                node={child}
-                parent={node}
-                selectedId={selectedId}
-                editingId={editingId}
-                zoom={zoom}
-                isAutoLayout={isAutoLayout}
-                isTopLevel={false}
-                isLeft={nodeIsLeft}
-                onSelect={onSelect}
-                onStartEdit={onStartEdit}
-                onEndEdit={onEndEdit}
-                onUpdateText={onUpdateText}
-                onToggleCollapse={onToggleCollapse}
-                onUpdateOffset={onUpdateOffset}
-                onEndDrag={onEndDrag}
-                onReparent={onReparent}
-                onReorder={onReorder}
-                onUpdateData={onUpdateData}
-                isRoot={child.id === 'root'}
-              />
-            ))}
+            {node.children.map((child, idx) => {
+              const childBranchIndex = (isRoot || depth === 0) ? idx : branchIndex;
+              
+              let extraMarginLeft: number | undefined = undefined;
+              if (structure === 'timeline') {
+                // Calculate dynamic positioning for timeline milestones based on previous milestone descendants spans
+                const W = node.children.map(m => estimateNodeWidth(m));
+                const spans = node.children.map(m => calculateDescendantSpan(m));
+                const G = 80; // default CSS gap between milestones
+                const S = 60; // safety gap to prevent overlaps between adjacent same-side branches
+                
+                const pos: number[] = [];
+                pos[0] = 0;
+                if (node.children.length > 1) {
+                  pos[1] = W[0] + G;
+                }
+                for (let k = 2; k <= idx; k++) {
+                  const defaultNext = pos[k - 1] + W[k - 1] + G;
+                  const sameSideConstraint = pos[k - 2] + spans[k - 2] + S;
+                  pos[k] = Math.max(defaultNext, sameSideConstraint);
+                }
+                
+                if (idx >= 2) {
+                  const defaultNext = pos[idx - 1] + W[idx - 1] + G;
+                  const extra = pos[idx] - defaultNext;
+                  if (extra > 0) {
+                    extraMarginLeft = extra;
+                  }
+                }
+              }
+
+              return (
+                <MindMapNode
+                  key={child.id}
+                  node={child}
+                  parent={node}
+                  selectedId={selectedId}
+                  editingId={editingId}
+                  zoom={zoom}
+                  isAutoLayout={isAutoLayout}
+                  isTopLevel={false}
+                  isLeft={nodeIsLeft}
+                  onSelect={onSelect}
+                  onStartEdit={onStartEdit}
+                  onEndEdit={onEndEdit}
+                  onUpdateText={onUpdateText}
+                  onToggleCollapse={onToggleCollapse}
+                  onUpdateOffset={onUpdateOffset}
+                  onEndDrag={onEndDrag}
+                  onReparent={onReparent}
+                  onReorder={onReorder}
+                  onUpdateData={onUpdateData}
+                  onOpenNoteEditor={onOpenNoteEditor}
+                  isRoot={child.id === 'root'}
+                  depth={depth + 1}
+                  inheritedStructure={structure === 'timeline' ? 'brace' : structure}
+                  theme={theme}
+                  branchIndex={childBranchIndex}
+                  isTimelineMode={isTimelineMode}
+                  extraMarginLeft={extraMarginLeft}
+                />
+              );
+            })}
           </div>
         )}
       </div>

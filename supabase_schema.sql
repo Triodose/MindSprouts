@@ -1,71 +1,56 @@
--- SQL schema for Supabase integration in MindSprout
--- Run these queries in your Supabase SQL Editor:
+-- =========================================================================
+-- 心智圖小苗 (MindSprouts) Supabase 資料庫 Schema
+-- =========================================================================
 
--- 1. Create the profiles table
-CREATE TABLE IF NOT EXISTS public.profiles (
-  id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-  email TEXT NOT NULL,
-  avatar_url TEXT,
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+-- 1. 建立心智圖資料表
+CREATE TABLE IF NOT EXISTS mindsprouts_mindmaps (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    title TEXT NOT NULL,
+    content JSONB NOT NULL,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- Enable RLS on profiles
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+-- 2. 建立索引以優化特定用戶的查詢效能
+CREATE INDEX IF NOT EXISTS mindsprouts_mindmaps_user_id_idx ON mindsprouts_mindmaps (user_id);
 
-CREATE POLICY "Allow public read-access to profiles" 
-  ON public.profiles FOR SELECT 
-  TO public 
-  USING (true);
+-- 3. 啟用行級安全性 (Row Level Security - RLS)
+ALTER TABLE mindsprouts_mindmaps ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow users to update own profile" 
-  ON public.profiles FOR UPDATE 
-  USING (auth.uid() = id);
+-- 4. 建立行級安全性存取原則 (RLS Policies)
+-- 限制登入用戶只能操作自己的心智圖資料，防止多專案共用時的越權存取
 
--- 2. Create the mindmaps table
-CREATE TABLE IF NOT EXISTS public.mindmaps (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
-  title TEXT NOT NULL,
-  content JSONB NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+CREATE POLICY "Allow authenticated users to read their own mindmaps" 
+ON mindsprouts_mindmaps FOR SELECT 
+TO authenticated 
+USING (auth.uid() = user_id);
 
--- Enable RLS on mindmaps
-ALTER TABLE public.mindmaps ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow authenticated users to insert their own mindmaps" 
+ON mindsprouts_mindmaps FOR INSERT 
+TO authenticated 
+WITH CHECK (auth.uid() = user_id);
 
--- Mindmaps policies: Users can only CRUD their own mindmaps
-CREATE POLICY "Users can view own mindmaps" 
-  ON public.mindmaps FOR SELECT 
-  USING (auth.uid() = user_id);
+CREATE POLICY "Allow authenticated users to update their own mindmaps" 
+ON mindsprouts_mindmaps FOR UPDATE 
+TO authenticated 
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can create own mindmaps" 
-  ON public.mindmaps FOR INSERT 
-  WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Allow authenticated users to delete their own mindmaps" 
+ON mindsprouts_mindmaps FOR DELETE 
+TO authenticated 
+USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can update own mindmaps" 
-  ON public.mindmaps FOR UPDATE 
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete own mindmaps" 
-  ON public.mindmaps FOR DELETE 
-  USING (auth.uid() = user_id);
-
--- 3. Trigger to automatically create profile on sign up
-CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS trigger AS $$
+-- 5. 自動同步 updated_at 欄位的觸發器
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, avatar_url)
-  VALUES (
-    new.id,
-    new.email,
-    new.raw_user_meta_data->>'avatar_url'
-  );
-  RETURN new;
+    NEW.updated_at = NOW();
+    RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+CREATE OR REPLACE TRIGGER trg_update_mindsprouts_mindmaps_updated_at
+BEFORE UPDATE ON mindsprouts_mindmaps
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

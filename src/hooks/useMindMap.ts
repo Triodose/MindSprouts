@@ -168,6 +168,29 @@ export const useMindMap = () => {
     return defaultMaps;
   }, []);
 
+  // --- Custom Sort Order Helper ---
+  const applyCustomSort = useCallback((items: any[]) => {
+    const savedOrder = localStorage.getItem('mindsprout_maps_order');
+    if (savedOrder) {
+      try {
+        const orderIds = JSON.parse(savedOrder);
+        return [...items].sort((a, b) => {
+          const idxA = orderIds.indexOf(a.id);
+          const idxB = orderIds.indexOf(b.id);
+          if (idxA === -1 && idxB === -1) {
+            return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+          }
+          if (idxA === -1) return -1; // new item goes to the top
+          if (idxB === -1) return 1;  // new item goes to the top
+          return idxA - idxB;
+        });
+      } catch (e) {
+        console.error('Failed to parse saved order:', e);
+      }
+    }
+    return [...items].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  }, []);
+
   // --- Load / Fetch Maps List ---
   const fetchMapsList = useCallback(async () => {
     if (supabase && user) {
@@ -175,7 +198,7 @@ export const useMindMap = () => {
       try {
         // 1. Fetch current maps from Supabase
         const { data, error } = await supabase
-          .from('mindmaps')
+          .from('mindsprouts_mindmaps')
           .select('id, title, updated_at')
           .eq('user_id', user.id)
           .order('updated_at', { ascending: false });
@@ -201,7 +224,7 @@ export const useMindMap = () => {
             try {
               // Insert into Supabase (let database generate UUID)
               const { data: newMap, error: insertError } = await supabase
-                .from('mindmaps')
+                .from('mindsprouts_mindmaps')
                 .insert({
                   title: localMap.title,
                   content: localMap.content,
@@ -242,13 +265,13 @@ export const useMindMap = () => {
 
           // Save the updated IDs back to LocalStorage
           localStorage.setItem(LOCAL_STORAGE_MAPS_KEY, JSON.stringify(migratedLocalMaps));
-          // Sort by updated_at descending
-          updatedSupabaseData.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+          // Sort by custom order or updated_at descending
+          updatedSupabaseData = applyCustomSort(updatedSupabaseData);
         }
 
         // 3. Update the state with the combined/migrated list
         if (updatedSupabaseData.length > 0) {
-          setMapsList(updatedSupabaseData);
+          setMapsList(applyCustomSort(updatedSupabaseData));
           if (!updatedSupabaseData.some((m) => m.id === activeMapId)) {
             setActiveMapId(updatedSupabaseData[0].id);
             localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, updatedSupabaseData[0].id);
@@ -257,7 +280,7 @@ export const useMindMap = () => {
           // If Supabase is still empty (highly unlikely now), fallback to create default
           const initial = treeUtils.createInitialTree();
           const { data: newMap, error: insertError } = await supabase
-            .from('mindmaps')
+            .from('mindsprouts_mindmaps')
             .insert({
               title: initial.text,
               content: initial,
@@ -286,7 +309,7 @@ export const useMindMap = () => {
         title: m.title,
         updated_at: m.updated_at
       }));
-      setMapsList(list);
+      setMapsList(applyCustomSort(list));
       
       // Keep active id consistent
       if (!list.some((m) => m.id === activeMapId) && list.length > 0) {
@@ -294,7 +317,7 @@ export const useMindMap = () => {
         localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, list[0].id);
       }
     }
-  }, [user, activeMapId, getLocalMaps]);
+  }, [user, activeMapId, getLocalMaps, applyCustomSort]);
 
   // Trigger fetch when user status changes or active ID switches locally
   useEffect(() => {
@@ -308,7 +331,7 @@ export const useMindMap = () => {
         setIsSyncing(true);
         try {
           const { data, error } = await supabase
-            .from('mindmaps')
+            .from('mindsprouts_mindmaps')
             .select('content')
             .eq('id', activeMapId)
             .eq('user_id', user.id)
@@ -397,7 +420,7 @@ export const useMindMap = () => {
       setIsSyncing(true);
       try {
         const { error } = await supabase
-          .from('mindmaps')
+          .from('mindsprouts_mindmaps')
           .update({
             title: currentTree.text,
             content: currentTree,
@@ -507,7 +530,7 @@ export const useMindMap = () => {
       setIsSyncing(true);
       try {
         const { data, error } = await supabase
-          .from('mindmaps')
+          .from('mindsprouts_mindmaps')
           .insert({
             title,
             content: initialTree,
@@ -561,7 +584,7 @@ export const useMindMap = () => {
       setIsSyncing(true);
       try {
         const { error } = await supabase
-          .from('mindmaps')
+          .from('mindsprouts_mindmaps')
           .delete()
           .eq('id', id)
           .eq('user_id', user.id);
@@ -591,7 +614,7 @@ export const useMindMap = () => {
       setIsSyncing(true);
       try {
         const { error } = await supabase
-          .from('mindmaps')
+          .from('mindsprouts_mindmaps')
           .update({
             title: newTitle,
             updated_at: timeString
@@ -676,10 +699,16 @@ export const useMindMap = () => {
   // --- Node Operations ---
   const addNodeChild = useCallback((parentId: string) => {
     const newId = treeUtils.generateId();
+    const parentDepth = treeUtils.getNodeDepth(tree, parentId);
+    const newDepth = parentDepth !== null ? parentDepth + 1 : 1;
+    const rootNode = treeUtils.findNode(tree, 'root');
+    const levelStyle = rootNode?.levelStyles?.[newDepth];
+
     const newChild: MindMapNode = {
       id: newId,
       text: '分支主題',
-      children: []
+      children: [],
+      style: levelStyle ? { ...levelStyle } : undefined
     };
 
     const newTree = treeUtils.addChildNode(tree, parentId, newChild);
@@ -695,10 +724,16 @@ export const useMindMap = () => {
     }
 
     const newId = treeUtils.generateId();
+    const targetDepth = treeUtils.getNodeDepth(tree, targetId);
+    const newDepth = targetDepth !== null ? targetDepth : 1;
+    const rootNode = treeUtils.findNode(tree, 'root');
+    const levelStyle = rootNode?.levelStyles?.[newDepth];
+
     const newSibling: MindMapNode = {
       id: newId,
       text: '分支主題',
-      children: []
+      children: [],
+      style: levelStyle ? { ...levelStyle } : undefined
     };
 
     const { newTree, success } = treeUtils.addSiblingNode(tree, targetId, newSibling);
@@ -748,7 +783,27 @@ export const useMindMap = () => {
   const applyStyleToLevel = useCallback((targetId: string, style: Partial<MindMapNode['style']>) => {
     const depth = treeUtils.getNodeDepth(tree, targetId);
     if (depth === null) return;
-    const newTree = treeUtils.applyStyleToDepth(tree, depth, style);
+    
+    // 1. Apply style to all existing nodes at this depth
+    let newTree = treeUtils.applyStyleToDepth(tree, depth, style);
+    
+    // 2. Save style for future nodes of this level on the root node
+    const rootNode = treeUtils.findNode(newTree, 'root');
+    if (rootNode) {
+      const currentLevelStyles = rootNode.levelStyles || {};
+      const newLevelStyles = {
+        ...currentLevelStyles,
+        [depth]: {
+          ...(currentLevelStyles[depth] || {}),
+          ...style
+        }
+      };
+      
+      newTree = treeUtils.updateNode(newTree, 'root', {
+        levelStyles: newLevelStyles
+      });
+    }
+
     updateTreeState(newTree);
   }, [tree, updateTreeState]);
 
@@ -811,18 +866,81 @@ export const useMindMap = () => {
     updateTreeState(newTree);
   }, [tree, updateTreeState]);
 
-  const importTree = useCallback((newTree: MindMapNode) => {
+  const importTree = useCallback(async (newTree: MindMapNode) => {
     // If the imported tree doesn't have a valid ID or structure, fix it
     const sanitized = {
       ...newTree,
       id: newTree.id || 'root'
     };
     const migrated = migrateTree(sanitized);
-    updateTreeState(migrated);
-    setSelectedId('root');
-    setEditingId(null);
-    centerCanvas();
-  }, [updateTreeState, centerCanvas]);
+    const title = migrated.text || '匯入的心智圖';
+    const timeString = new Date().toISOString();
+
+    if (supabase && user) {
+      setIsSyncing(true);
+      try {
+        const { data, error } = await supabase
+          .from('mindsprouts_mindmaps')
+          .insert({
+            title,
+            content: migrated, // Use the imported migrated tree as the initial content
+            user_id: user.id
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          setMapsList((prev) => [{ id: data.id, title: data.title, updated_at: data.updated_at }, ...prev]);
+          setActiveMapId(data.id);
+          localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, data.id);
+          
+          // Instantly set states to prevent loading delay
+          setTree(migrated);
+          setHistory({
+            past: [],
+            present: migrated,
+            future: []
+          });
+          setSelectedId('root');
+          setEditingId(null);
+          setTimeout(() => centerCanvas(), 100);
+        }
+      } catch (err) {
+        console.error('Failed to import map in Supabase:', err);
+        alert('匯入心智圖失敗！');
+      } finally {
+        setIsSyncing(false);
+      }
+    } else {
+      // Local Mode
+      const newId = Math.random().toString(36).substring(2, 9);
+      const newMap = {
+        id: newId,
+        title,
+        content: migrated, // Use the imported migrated tree
+        updated_at: timeString
+      };
+      const localMaps = getLocalMaps();
+      const updated = [newMap, ...localMaps];
+      localStorage.setItem(LOCAL_STORAGE_MAPS_KEY, JSON.stringify(updated));
+      
+      setMapsList(updated.map(m => ({ id: m.id, title: m.title, updated_at: m.updated_at })));
+      setActiveMapId(newId);
+      localStorage.setItem(LOCAL_STORAGE_ACTIVE_ID_KEY, newId);
+      
+      // Instantly set states
+      setTree(migrated);
+      setHistory({
+        past: [],
+        present: migrated,
+        future: []
+      });
+      setSelectedId('root');
+      setEditingId(null);
+      setTimeout(() => centerCanvas(), 100);
+    }
+  }, [user, getLocalMaps, centerCanvas]);
 
   // --- Drag Operations ---
   const updateNodeOffsetSilent = useCallback((targetId: string, offset: { x: number; y: number } | undefined) => {
@@ -1043,6 +1161,26 @@ export const useMindMap = () => {
     }
   };
 
+  const reorderMapsList = useCallback((startIndex: number, endIndex: number) => {
+    setMapsList(prev => {
+      const result = Array.from(prev);
+      const [removed] = result.splice(startIndex, 1);
+      result.splice(endIndex, 0, removed);
+      
+      const orderIds = result.map(m => m.id);
+      localStorage.setItem('mindsprout_maps_order', JSON.stringify(orderIds));
+      
+      // If in Local mode, also update the actual map order in LOCAL_STORAGE_MAPS_KEY
+      if (!supabase || !user) {
+        const localMaps = getLocalMaps();
+        const newLocalMaps = orderIds.map(id => localMaps.find(m => m.id === id)).filter(Boolean);
+        localStorage.setItem(LOCAL_STORAGE_MAPS_KEY, JSON.stringify(newLocalMaps));
+      }
+      
+      return result;
+    });
+  }, [supabase, user, getLocalMaps]);
+
   return {
     tree,
     selectedId,
@@ -1096,6 +1234,7 @@ export const useMindMap = () => {
     addSummary,
     updateSummaryRange,
     deleteSummary,
+    reorderMapsList,
     isSupabaseConfigured: isSupabaseConfigured()
   };
 };

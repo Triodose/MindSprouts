@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { MindMapNode, MindMapTheme } from '../types/mindmap';
 import { THEMES } from '../utils/themes';
-import { LogIn, LogOut, Cloud, CloudOff, RefreshCw } from 'lucide-react';
+import { LogIn, LogOut, Cloud, CloudOff, RefreshCw, Flag, Star, Heart, HelpCircle, Info } from 'lucide-react';
 import { findParent } from '../utils/treeUtils';
 
 interface InspectorProps {
@@ -33,6 +33,14 @@ const PRES_BOUNDARY_COLORS = [
   { name: '琥珀黃 (Amber)', fill: 'rgba(245, 158, 11, 0.05)', border: '#f59e0b' },
   { name: '紫羅蘭 (Violet)', fill: 'rgba(139, 92, 246, 0.05)', border: '#8b5cf6' },
   { name: '石板灰 (Slate)', fill: 'rgba(148, 163, 184, 0.06)', border: '#94a3b8' }
+];
+
+const GRID_PRESET_COLORS = [
+  '#FFFFFF', '#F2F2F2', '#E0E0E0', '#C0C0C0', '#9E9E9E', '#757575', '#616161', '#424242', '#000000',
+  '#FFF59D', '#FFAB91', '#A5D6A7', '#80CBC4', '#81D4FA', '#90CAF9', '#9FA8DA', '#B39DDB', '#F48FB1',
+  '#FFEE58', '#FF7043', '#66BB6A', '#26A69A', '#29B6F6', '#42A5F5', '#5C6BC0', '#7E57C2', '#EC407A',
+  '#FBC02D', '#F4511E', '#43A047', '#00897B', '#00ACC1', '#1E88E5', '#3F51B5', '#673AB7', '#D81B60',
+  '#EF6C00', '#C62828', '#2E7D32', '#00695C', '#00838F', '#1565C0', '#283593', '#4527A0', '#880E4F'
 ];
 
 const getNodeSide = (rootNode: MindMapNode, targetId: string): 'left' | 'right' => {
@@ -93,6 +101,88 @@ export const Inspector: React.FC<InspectorProps> = ({
   const rootNode = tree.children.find((c) => c.id === 'root');
   const isTimelineMode = rootNode?.style?.structure === 'timeline';
 
+  const renderProgressIconSvg = (progress: number) => {
+    const radius = 3;
+    const circumference = 2 * Math.PI * radius; // ~18.85
+    const strokeDashoffset = circumference - (progress / 100) * circumference;
+
+    if (progress === 100) {
+      return (
+        <svg width="14" height="14" viewBox="0 0 16 16" style={{ display: 'block' }}>
+          <circle cx="8" cy="8" r="7" fill="#10b981" />
+          <path
+            d="M5 8 l2 2 l4 -4"
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+    }
+
+    return (
+      <svg width="14" height="14" viewBox="0 0 16 16" style={{ display: 'block' }}>
+        <circle cx="8" cy="8" r="6" fill="#ffffff" stroke="#10b981" strokeWidth="1.5" />
+        {progress > 0 && (
+          <circle
+            cx="8"
+            cy="8"
+            r={radius}
+            fill="none"
+            stroke="#10b981"
+            strokeWidth="6"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            transform="rotate(-90 8 8)"
+          />
+        )}
+      </svg>
+    );
+  };
+
+  const getInheritedStructure = (nodeId: string): string => {
+    let currId = nodeId;
+    let inherited = 'logic';
+    while (currId && currId !== 'root') {
+      const parentNode = findParent(tree, currId);
+      if (!parentNode) break;
+      if (parentNode.style?.structure) {
+        inherited = parentNode.style.structure;
+        break;
+      }
+      currId = parentNode.id;
+    }
+    if (currId === 'root') {
+      const rootNode = tree.children.find((c) => c.id === 'root');
+      inherited = rootNode?.style?.structure || 'logic';
+    }
+
+    if (inherited === 'timeline') {
+      const parentNode = findParent(tree, nodeId);
+      const isDirectChild = parentNode && parentNode.style?.structure === 'timeline';
+      if (!isDirectChild) {
+        return 'logic';
+      }
+    }
+    return inherited;
+  };
+
+  const getStructureName = (structureKey: string): string => {
+    const names: Record<string, string> = {
+      'logic': '右側邏輯圖',
+      'logic-left': '左側邏輯圖',
+      'mindmap': '心智圖',
+      'org': '組織結構圖',
+      'tree': '樹狀圖',
+      'brace': '括號圖',
+      'timeline': '時間軸',
+      'fishbone': '魚骨圖'
+    };
+    return names[structureKey] || structureKey;
+  };
+
   // Dynamically calculate preset colors based on the active mind map theme
   const presetColors = React.useMemo(() => {
     const list = new Set<string>();
@@ -148,9 +238,15 @@ export const Inspector: React.FC<InspectorProps> = ({
     onUpdateStyle(selectedId, { shape: e.target.value as any });
   };
 
+  const handleLineStyleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    if (!selectedId) return;
+    onUpdateStyle(selectedId, { lineStyle: e.target.value as any });
+  };
+
   const handleStructureChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (!selectedId) return;
-    onUpdateStyle(selectedId, { structure: e.target.value as any });
+    const val = e.target.value;
+    onUpdateStyle(selectedId, { structure: val ? (val as any) : undefined });
   };
 
   const handleFontSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -243,57 +339,153 @@ export const Inspector: React.FC<InspectorProps> = ({
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <span style={{ fontSize: '11px', fontWeight: 600, opacity: 0.8 }}>自訂顏色</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <input 
-              type="color" 
-              value={displayValue.startsWith('#') ? displayValue : '#ffffff'} 
-              onChange={(e) => onChange(e.target.value)}
-              style={{ 
-                width: '28px', 
-                height: '24px', 
-                padding: 0, 
-                border: 'none', 
-                background: 'transparent', 
-                cursor: 'pointer' 
-              }}
-            />
+          <div 
+            style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(9, 1fr)', 
+              gap: '4px',
+              marginTop: '2px'
+            }}
+          >
+            {GRID_PRESET_COLORS.map((c) => (
+              <div
+                key={`${type}-grid-${c}`}
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '3px',
+                  backgroundColor: c,
+                  cursor: 'pointer',
+                  border: value?.toLowerCase() === c.toLowerCase() ? '1.5px solid var(--theme-ui-accent-color)' : '1px solid rgba(0,0,0,0.15)',
+                  boxSizing: 'border-box',
+                  transition: 'transform 0.1s'
+                }}
+                onClick={() => onChange(c)}
+                className="color-swatch-rect"
+                title={c}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.15)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; }}
+              />
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
             <input
               type="text"
               value={displayValue}
               onChange={(e) => onChange(e.target.value || undefined)}
-              placeholder="無 / #hex"
+              placeholder="#hex"
               className="inspector-input"
               style={{ 
                 flexGrow: 1, 
-                padding: '2px 6px', 
+                padding: '4px 6px', 
                 fontSize: '11px',
-                width: '100%'
+                height: '24px',
+                borderRadius: '4px',
+                border: '1px solid var(--theme-glass-border)',
+                background: 'rgba(255, 255, 255, 0.05)',
+                color: 'var(--theme-text-color)',
+                outline: 'none',
+                width: '60px'
               }}
+            />
+            
+            <div 
+              style={{
+                width: '20px',
+                height: '20px',
+                borderRadius: '4px',
+                backgroundColor: displayValue === 'transparent' ? 'transparent' : (displayValue || 'rgba(255,255,255,0.2)'),
+                border: '1px solid var(--theme-glass-border)',
+                position: 'relative',
+                overflow: 'hidden',
+                flexShrink: 0
+              }}
+            >
+              {displayValue === 'transparent' && (
+                <div style={{
+                  position: 'absolute',
+                  width: '100%',
+                  height: '2px',
+                  backgroundColor: '#ef4444',
+                  transform: 'rotate(-45deg) translate(-1px, 5px)',
+                  transformOrigin: 'center'
+                }} />
+              )}
+            </div>
+
+            <input 
+              id={`hidden-picker-${type}`}
+              type="color" 
+              value={displayValue.startsWith('#') ? displayValue : '#ffffff'} 
+              onChange={(e) => onChange(e.target.value)}
+              style={{ display: 'none' }}
+            />
+
+            <div
+              className="color-wheel-btn"
+              style={{
+                width: '20px',
+                height: '20px',
+                borderRadius: '50%',
+                background: 'conic-gradient(from 0deg, red, yellow, lime, aqua, blue, magenta, red)',
+                border: '1px solid var(--theme-glass-border)',
+                cursor: 'pointer',
+                flexShrink: 0,
+                transition: 'transform 0.1s'
+              }}
+              onClick={() => {
+                const el = document.getElementById(`hidden-picker-${type}`);
+                if (el) el.click();
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.15)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; }}
+              title="開啓進階自訂選色器"
             />
           </div>
         </div>
 
         {type !== 'text' && (
-          <button
-            onClick={() => {
-              onChange(undefined);
-              setActivePicker(null);
-            }}
-            className="btn-primary"
-            style={{
-              padding: '6px',
-              fontSize: '11px',
-              marginTop: '4px',
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              color: '#ef4444',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: 600
-            }}
-          >
-            設為透明 / 預設
-          </button>
+          <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+            <button
+              onClick={() => {
+                onChange(undefined);
+                setActivePicker(null);
+              }}
+              style={{
+                flex: 1,
+                padding: '6px',
+                fontSize: '11px',
+                backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid var(--theme-glass-border)',
+                color: 'var(--theme-text-color)',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              恢復預設
+            </button>
+            <button
+              onClick={() => {
+                onChange('transparent');
+                setActivePicker(null);
+              }}
+              style={{
+                flex: 1,
+                padding: '6px',
+                fontSize: '11px',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#ef4444',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              設為透明
+            </button>
+          </div>
         )}
       </div>
     );
@@ -314,7 +506,8 @@ export const Inspector: React.FC<InspectorProps> = ({
 
   const currentShape = selectedNode?.style?.shape || 'rounded';
   const currentBorderStyle = selectedNode?.style?.borderStyle || 'solid';
-  const currentStructure = selectedNode?.style?.structure || 'logic';
+  const currentLineStyle = selectedNode?.style?.lineStyle || 'curve';
+  const currentStructure = selectedNode?.style?.structure || '';
   const selectedNodeSide = selectedNode && selectedId ? getNodeSide(tree, selectedId) : 'right';
   const currentFontSize = selectedNode?.style?.fontSize || (selectedId === 'root' ? '18px' : '14px');
   const currentFontWeight = selectedNode?.style?.fontWeight || (selectedId === 'root' ? '700' : '500');
@@ -417,6 +610,19 @@ export const Inspector: React.FC<InspectorProps> = ({
               </select>
             </div>
 
+            <div className="inspector-row">
+              <span className="inspector-label">分枝線條</span>
+              <select
+                className="inspector-select"
+                value={currentLineStyle}
+                onChange={handleLineStyleChange}
+              >
+                <option value="curve">曲線 (Curve)</option>
+                <option value="straight">直線 (Straight)</option>
+                <option value="tapered">漸細線 (Tapered)</option>
+              </select>
+            </div>
+
             <div className="inspector-row" style={{ position: 'relative' }}>
               <span className="inspector-label">外框顏色</span>
               <div 
@@ -461,7 +667,7 @@ export const Inspector: React.FC<InspectorProps> = ({
               {activePicker === 'border' && renderColorPickerDropdown('border', currentBorderColor, handleBorderSelect)}
             </div>
 
-            {!isTimelineMode && (
+            {!isTimelineMode && selectedId !== 'root' && (
               <div className="inspector-row">
                 <span className="inspector-label">分支結構</span>
                 <select
@@ -469,6 +675,9 @@ export const Inspector: React.FC<InspectorProps> = ({
                   value={currentStructure}
                   onChange={handleStructureChange}
                 >
+                  {selectedId && selectedId !== 'root' && (
+                    <option value="">繼承父節點 (當前: {getStructureName(getInheritedStructure(selectedId))})</option>
+                  )}
                   {selectedNodeSide === 'left' ? (
                     <option value="logic-left">左側邏輯圖 (Logic Left)</option>
                   ) : (
@@ -563,13 +772,13 @@ export const Inspector: React.FC<InspectorProps> = ({
                         width: '16px', 
                         height: '16px', 
                         borderRadius: '4px', 
-                        backgroundColor: currentBg || 'transparent',
+                        backgroundColor: currentBg === 'transparent' ? 'transparent' : (currentBg || 'rgba(255,255,255,0.2)'),
                         border: '1px solid var(--theme-glass-border)',
                         position: 'relative',
                         overflow: 'hidden'
                       }} 
                     >
-                      {!currentBg && (
+                      {currentBg === 'transparent' && (
                         <div style={{
                           position: 'absolute',
                           width: '100%',
@@ -580,7 +789,9 @@ export const Inspector: React.FC<InspectorProps> = ({
                         }} />
                       )}
                     </div>
-                    <span style={{ fontSize: '12px' }}>{currentBg || '透明'}</span>
+                    <span style={{ fontSize: '12px' }}>
+                      {currentBg === 'transparent' ? '透明' : currentBg ? currentBg : '預設'}
+                    </span>
                   </div>
                   <span style={{ fontSize: '10px', opacity: 0.6 }}>▼</span>
                 </div>
@@ -619,7 +830,8 @@ export const Inspector: React.FC<InspectorProps> = ({
                     color: selectedNode.style?.color,
                     backgroundColor: selectedNode.style?.backgroundColor,
                     borderColor: selectedNode.style?.borderColor,
-                    borderStyle: selectedNode.style?.borderStyle
+                    borderStyle: selectedNode.style?.borderStyle,
+                    lineStyle: selectedNode.style?.lineStyle
                   };
                   onApplyStyleToLevel(selectedId, styleToCopy);
                 }}
@@ -633,46 +845,110 @@ export const Inspector: React.FC<InspectorProps> = ({
             
             <div className="inspector-title" style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.8 }}>節點標記與備註</div>
             
-            <div className="inspector-row">
+            <div className="inspector-row-vertical">
               <span className="inspector-label">優先級</span>
-              <select
-                className="inspector-select"
-                value={selectedNode.priority || ''}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  onUpdateData(selectedNode.id, { priority: val ? parseInt(val, 10) : undefined });
-                }}
-              >
-                <option value="">無</option>
-                <option value="1">P1 (高)</option>
-                <option value="2">P2</option>
-                <option value="3">P3</option>
-                <option value="4">P4</option>
-                <option value="5">P5</option>
-                <option value="6">P6</option>
-                <option value="7">P7</option>
-                <option value="8">P8</option>
-                <option value="9">P9 (低)</option>
-              </select>
+              <div className="priority-grid">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`priority-btn p-${p} ${selectedNode.priority === p ? 'active' : ''}`}
+                    onClick={() => onUpdateData(selectedNode.id, { priority: p })}
+                    title={`P${p}`}
+                  >
+                    {p}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="priority-clear-btn"
+                  onClick={() => onUpdateData(selectedNode.id, { priority: undefined })}
+                  title="清除優先級"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <div className="inspector-row">
+            <div className="inspector-row-vertical" style={{ marginTop: '14px' }}>
               <span className="inspector-label">任務進度</span>
-              <select
-                className="inspector-select"
-                value={selectedNode.progress !== undefined ? selectedNode.progress.toString() : ''}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  onUpdateData(selectedNode.id, { progress: val ? parseInt(val, 10) : undefined });
-                }}
-              >
-                <option value="">無</option>
-                <option value="0">0% (未開始)</option>
-                <option value="25">25% (進行中)</option>
-                <option value="50">50% (半數完成)</option>
-                <option value="75">75% (即將完成)</option>
-                <option value="100">100% (已完成)</option>
-              </select>
+              <div className="progress-grid">
+                {[0, 25, 50, 75, 100].map((progressValue) => (
+                  <button
+                    key={progressValue}
+                    type="button"
+                    className={`progress-btn ${selectedNode.progress === progressValue ? 'active' : ''}`}
+                    onClick={() => onUpdateData(selectedNode.id, { progress: progressValue })}
+                    title={`${progressValue}%`}
+                  >
+                    <span className="progress-btn-icon">
+                      {renderProgressIconSvg(progressValue)}
+                    </span>
+                    <span className="progress-btn-text">{progressValue}%</span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="progress-clear-btn"
+                  onClick={() => onUpdateData(selectedNode.id, { progress: undefined })}
+                  title="清除進度"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="inspector-row-vertical" style={{ marginTop: '14px' }}>
+              <span className="inspector-label">標記與旗幟</span>
+              <div className="flag-picker-grid">
+                {['red-flag', 'orange-flag', 'yellow-flag', 'green-flag', 'blue-flag', 'purple-flag', 'star', 'heart', 'question', 'info'].map((flagKey) => {
+                  const flagTitleMap: Record<string, string> = {
+                    'red-flag': '紅旗',
+                    'orange-flag': '橘旗',
+                    'yellow-flag': '黃旗',
+                    'green-flag': '綠旗',
+                    'blue-flag': '藍旗',
+                    'purple-flag': '紫旗',
+                    'star': '重要星星',
+                    'heart': '喜愛心形',
+                    'question': '待確認問號',
+                    'info': '提示資訊'
+                  };
+                  const renderFlagIconHelper = (key: string) => {
+                    const size = 14;
+                    switch (key) {
+                      case 'red-flag':
+                      case 'orange-flag':
+                      case 'yellow-flag':
+                      case 'green-flag':
+                      case 'blue-flag':
+                      case 'purple-flag':
+                        return <span className={`node-badge-flag flag-${key.split('-')[0]}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Flag size={size} fill="currentColor" /></span>;
+                      case 'star':
+                        return <span className="node-badge-flag flag-star" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Star size={size} fill="currentColor" /></span>;
+                      case 'heart':
+                        return <span className="node-badge-flag flag-heart" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Heart size={size} fill="currentColor" /></span>;
+                      case 'question':
+                        return <span className="node-badge-flag flag-question" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><HelpCircle size={size} /></span>;
+                      case 'info':
+                        return <span className="node-badge-flag flag-info" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Info size={size} /></span>;
+                      default:
+                        return null;
+                    }
+                  };
+                  return (
+                    <button
+                      key={flagKey}
+                      type="button"
+                      className={`flag-btn flag-${flagKey} ${selectedNode.flag === flagKey ? 'active' : ''}`}
+                      onClick={() => onUpdateData(selectedNode.id, { flag: selectedNode.flag === flagKey ? undefined : flagKey })}
+                      title={flagTitleMap[flagKey]}
+                    >
+                      {renderFlagIconHelper(flagKey)}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="inspector-row">
@@ -700,27 +976,52 @@ export const Inspector: React.FC<InspectorProps> = ({
               />
             </div>
 
-            <div style={{ marginTop: '16px' }}>
-              <span className="inspector-label" style={{ display: 'block', marginBottom: '6px' }}>詳細備註說明</span>
-              <textarea
-                className="inspector-textarea"
-                placeholder="在這裡輸入此主題的詳細備註、待辦細節或參考資料..."
-                value={selectedNode.note || ''}
-                onChange={(e) => {
-                  onUpdateData(selectedNode.id, { note: e.target.value || undefined });
-                }}
+
+
+            <div className="inspector-divider" style={{ margin: '20px 0 16px', borderTop: '1px dashed var(--theme-glass-border)' }} />
+            
+            <div className="inspector-title" style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.8 }}>超連結與多媒體</div>
+
+            <div className="inspector-row-vertical" style={{ marginTop: '10px' }}>
+              <span className="inspector-label">超連結網址 (URL)</span>
+              <input
+                className="inspector-input"
+                type="text"
+                placeholder="例如: google.com"
+                value={selectedNode.link || ''}
+                onChange={(e) => onUpdateData(selectedNode.id, { link: e.target.value || undefined })}
                 style={{
-                  width: '100%',
-                  height: '80px',
-                  background: 'rgba(255, 255, 255, 0.03)',
+                  background: 'rgba(255, 255, 255, 0.05)',
                   border: '1px solid var(--theme-glass-border)',
-                  borderRadius: '6px',
-                  padding: '8px',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
                   color: 'var(--theme-text-color)',
                   fontSize: '12px',
-                  resize: 'none',
+                  width: '100%',
                   outline: 'none',
-                  fontFamily: 'inherit'
+                  marginTop: '4px'
+                }}
+              />
+            </div>
+
+            <div className="inspector-row-vertical" style={{ marginTop: '12px' }}>
+              <span className="inspector-label">內嵌圖片網址 (Image URL)</span>
+              <input
+                className="inspector-input"
+                type="text"
+                placeholder="貼上圖片網址以內嵌預覽"
+                value={selectedNode.image || ''}
+                onChange={(e) => onUpdateData(selectedNode.id, { image: e.target.value || undefined })}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid var(--theme-glass-border)',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  color: 'var(--theme-text-color)',
+                  fontSize: '12px',
+                  width: '100%',
+                  outline: 'none',
+                  marginTop: '4px'
                 }}
               />
             </div>

@@ -31,6 +31,8 @@ interface ConnectionLine {
   id: string;
   path: string;
   color: string;
+  fill?: string;
+  strokeWidth?: number;
 }
 
 interface RelationshipLine {
@@ -164,9 +166,14 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
       const rootNode = tree.children.find((c: MindMapNode) => c.id === 'root');
       const isTimelineMode = rootNode?.style?.structure === 'timeline';
 
-      const traverse = (node: MindMapNode, branchIndex: number = -1, isLeft: boolean = false) => {
+      const traverse = (
+        node: MindMapNode, 
+        branchIndex: number = -1, 
+        isLeft: boolean = false, 
+        inheritedStructure: string = 'logic'
+      ) => {
         if (node.id === 'virtual-root') {
-          node.children.forEach((child) => traverse(child, -1, false));
+          node.children.forEach((child) => traverse(child, -1, false, inheritedStructure));
           return;
         }
 
@@ -179,7 +186,11 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
         const pCoords = getUnzoomedCoords(parentRect);
         
         const isRootNode = node.id === 'root';
-        let structure = node.style?.structure || 'logic';
+        let structure = node.style?.structure || inheritedStructure;
+        const isMilestoneNode = findParent(tree, node.id)?.id === 'root';
+        if (isTimelineMode && !isRootNode && !isMilestoneNode) {
+          structure = 'brace';
+        }
         if (!isRootNode) {
           if (isLeft && structure === 'logic') {
             structure = 'logic-left';
@@ -195,7 +206,9 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
           const childRect = childEl.getBoundingClientRect();
           const cCoords = getUnzoomedCoords(childRect);
 
-          const isLeftGeom = (cCoords.left + cCoords.width / 2) < (pCoords.left + pCoords.width / 2);
+          const isLeftGeom = structure === 'brace'
+            ? isLeft
+            : (cCoords.left + cCoords.width / 2) < (pCoords.left + pCoords.width / 2);
 
           let startX = 0;
           let startY = 0;
@@ -228,6 +241,100 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
             startY = pCoords.bottom;
             endX = (cCoords.left + cCoords.width / 2 < startX) ? cCoords.right : cCoords.left;
             endY = cCoords.top + cCoords.height / 2;
+          } else if (isRootNode && structure === 'mindmap') {
+            const getCoordsForChild = (cId: string) => {
+              const el = treeContainer.querySelector(`[data-node-id="${cId}"]`);
+              return el ? getUnzoomedCoords(el.getBoundingClientRect()) : null;
+            };
+
+            const leftChildren = node.children
+              .filter(c => {
+                const coords = getCoordsForChild(c.id);
+                return coords ? (coords.left + coords.width / 2 < pCoords.left + pCoords.width / 2) : false;
+              })
+              .sort((a, b) => {
+                const rA = getCoordsForChild(a.id);
+                const rB = getCoordsForChild(b.id);
+                return (rA?.top || 0) - (rB?.top || 0);
+              });
+              
+            const rightChildren = node.children
+              .filter(c => {
+                const coords = getCoordsForChild(c.id);
+                return coords ? (coords.left + coords.width / 2 >= pCoords.left + pCoords.width / 2) : false;
+              })
+              .sort((a, b) => {
+                const rA = getCoordsForChild(a.id);
+                const rB = getCoordsForChild(b.id);
+                return (rA?.top || 0) - (rB?.top || 0);
+              });
+
+            const isLeftScreen = (cCoords.left + cCoords.width / 2 < pCoords.left + pCoords.width / 2);
+            
+            const k = isLeftScreen 
+              ? leftChildren.findIndex(c => c.id === child.id)
+              : rightChildren.findIndex(c => c.id === child.id);
+            
+            const M = isLeftScreen ? leftChildren.length : rightChildren.length;
+            
+            // Priority list of connection points (strictly sorted from top to bottom based on M)
+            let pt = { type: 'center', i: 4 };
+            if (M === 1) {
+              pt = { type: 'center', i: 4 };
+            } else if (M === 2) {
+              if (k === 0) pt = { type: 'top', i: isLeftScreen ? 3 : 5 };
+              else pt = { type: 'center', i: 4 };
+            } else if (M === 3) {
+              if (k === 0) pt = { type: 'top', i: isLeftScreen ? 3 : 5 };
+              else if (k === 1) pt = { type: 'center', i: 4 };
+              else pt = { type: 'bottom', i: isLeftScreen ? 3 : 5 };
+            } else if (M === 4) {
+              if (k === 0) pt = { type: 'top', i: isLeftScreen ? 3 : 5 };
+              else if (k === 1) pt = { type: 'center', i: 4 };
+              else if (k === 2) pt = { type: 'bottom', i: isLeftScreen ? 2 : 6 };
+              else pt = { type: 'bottom', i: isLeftScreen ? 3 : 5 };
+            } else if (M === 5) {
+              if (k === 0) pt = { type: 'top', i: isLeftScreen ? 3 : 5 };
+              else if (k === 1) pt = { type: 'top', i: isLeftScreen ? 2 : 6 };
+              else if (k === 2) pt = { type: 'center', i: 4 };
+              else if (k === 3) pt = { type: 'bottom', i: isLeftScreen ? 2 : 6 };
+              else pt = { type: 'bottom', i: isLeftScreen ? 3 : 5 };
+            } else if (M === 6) {
+              if (k === 0) pt = { type: 'top', i: isLeftScreen ? 3 : 5 };
+              else if (k === 1) pt = { type: 'top', i: isLeftScreen ? 2 : 6 };
+              else if (k === 2) pt = { type: 'top', i: isLeftScreen ? 1 : 7 };
+              else if (k === 3) pt = { type: 'center', i: 4 };
+              else if (k === 4) pt = { type: 'bottom', i: isLeftScreen ? 2 : 6 };
+              else pt = { type: 'bottom', i: isLeftScreen ? 3 : 5 };
+            } else {
+              if (k === 0) pt = { type: 'top', i: isLeftScreen ? 3 : 5 };
+              else if (k === 1) pt = { type: 'top', i: isLeftScreen ? 2 : 6 };
+              else if (k === 2) pt = { type: 'top', i: isLeftScreen ? 1 : 7 };
+              else if (k === 3) pt = { type: 'center', i: 4 };
+              else if (k === 4) pt = { type: 'bottom', i: isLeftScreen ? 1 : 7 };
+              else if (k === 5) pt = { type: 'bottom', i: isLeftScreen ? 2 : 6 };
+              else if (k === 6) pt = { type: 'bottom', i: isLeftScreen ? 3 : 5 };
+              else pt = { type: 'center', i: 4 };
+            }
+            
+            if (pt.type === 'center') {
+              startX = isLeftScreen ? pCoords.left : pCoords.right;
+              startY = pCoords.top + pCoords.height / 2;
+            } else if (pt.type === 'top') {
+              startX = pCoords.left + (pCoords.width * pt.i) / 8;
+              startY = pCoords.top;
+            } else {
+              startX = pCoords.left + (pCoords.width * pt.i) / 8;
+              startY = pCoords.bottom;
+            }
+            
+            if (isLeftScreen) {
+              endX = cCoords.right;
+              endY = cCoords.top + cCoords.height / 2;
+            } else {
+              endX = cCoords.left;
+              endY = cCoords.top + cCoords.height / 2;
+            }
           } else if (isLeftGeom) {
             startX = pCoords.left;
             startY = pCoords.top + pCoords.height / 2;
@@ -248,29 +355,207 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
             const cp2x = endX;
             const cp2y = endY - controlYOffset;
             path = `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`;
-          } else if (node.id === 'root' && structure === 'timeline') {
+          } else if (node.style?.structure === 'timeline') {
             // Straight horizontal line for main timeline axis
             path = `M ${startX} ${startY} L ${endX} ${endY}`;
-          } else if (structure === 'tree' || isTimelineUp || isTimelineDown) {
-            // Vertical-first elbow connection for up/down branches
+          } else if (isTimelineUp || isTimelineDown) {
+            // Slanted diagonal elbow connection for timeline milestone branches
+            const maxSlant = Math.min(30, Math.abs(endX - startX), Math.abs(endY - startY));
+            const directionSign = (endX > startX) ? 1 : -1;
+            const actualSlantX = maxSlant * directionSign;
+            const slantYOffset = maxSlant * (isTimelineUp ? -1 : 1);
+            const branchY = endY - slantYOffset;
+            path = `M ${startX} ${startY} V ${branchY} L ${startX + actualSlantX} ${endY} H ${endX}`;
+          } else if (structure === 'tree') {
+            // Vertical-first elbow connection for tree
             path = `M ${startX} ${startY} V ${endY} H ${endX}`;
           } else if (structure === 'fishbone') {
             path = `M ${startX} ${startY} L ${endX} ${endY}`;
           } else if (structure === 'brace') {
-            const sign = isLeftGeom ? -1 : 1;
-            const cp1x = startX + 15 * sign;
-            const cp1y = startY;
-            const cp2x = startX + 15 * sign;
-            const cp2y = endY;
-            path = `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`;
+            if (node.children.length === 1) {
+              path = `M ${startX} ${startY} H ${endX}`;
+            } else {
+              // Gather minY and maxY of all children to construct brace
+              let minY = Infinity;
+              let maxY = -Infinity;
+              node.children.forEach((c) => {
+                const cEl = treeContainer.querySelector(`[data-node-id="${c.id}"]`);
+                if (cEl) {
+                  const cRect = cEl.getBoundingClientRect();
+                  const coords = getUnzoomedCoords(cRect);
+                  const childCenterY = coords.top + coords.height / 2;
+                  if (childCenterY < minY) minY = childCenterY;
+                  if (childCenterY > maxY) maxY = childCenterY;
+                }
+              });
+
+              if (minY === Infinity || maxY === -Infinity) {
+                path = `M ${startX} ${startY} H ${endX}`;
+              } else {
+                const gap = Math.abs(endX - startX);
+                const offsetTip = Math.min(6, gap * 0.15);
+                const offsetBack = Math.min(16, gap * 0.4);
+                const offsetCorner = Math.min(24, gap * 0.6);
+                
+                const dir = isLeftGeom ? -1 : 1;
+                const tipX = startX + offsetTip * dir;
+                const backX = startX + offsetBack * dir;
+                const cornerX = startX + offsetCorner * dir;
+                
+                const R = Math.min(8, Math.abs(maxY - minY) / 4);
+                const cuspY = Math.max(minY + R, Math.min(maxY - R, startY));
+
+                const isTopmost = Math.abs(endY - minY) < 1;
+                const isBottommost = Math.abs(endY - maxY) < 1;
+                const childStartX = (isTopmost || isBottommost) ? cornerX : backX;
+
+                const activeLineStyle = node.style?.lineStyle || 'curve';
+
+                if (activeLineStyle === 'tapered') {
+                  const isTopLevelBranch = node.id === 'root';
+                  const startW = isTopLevelBranch ? 18 : 10;
+                  const endW = 1.2;
+
+                  const parentPath = `M ${startX} ${startY - startW/2} H ${tipX} V ${startY + startW/2} H ${startX} Z`;
+                  
+                  const upperBranch = `M ${tipX} ${cuspY - startW/2} ` +
+                                      `C ${backX} ${cuspY - startW/2}, ${backX} ${minY - endW/2}, ${cornerX} ${minY - endW/2} ` +
+                                      `L ${cornerX} ${minY + endW/2} ` +
+                                      `C ${backX} ${minY + endW/2}, ${backX} ${cuspY + startW/2}, ${tipX} ${cuspY + startW/2} ` +
+                                      `Z`;
+                                      
+                  const lowerBranch = `M ${tipX} ${cuspY - startW/2} ` +
+                                      `C ${backX} ${cuspY - startW/2}, ${backX} ${maxY - endW/2}, ${cornerX} ${maxY - endW/2} ` +
+                                      `L ${cornerX} ${maxY + endW/2} ` +
+                                      `C ${backX} ${maxY + endW/2}, ${backX} ${cuspY + startW/2}, ${tipX} ${cuspY + startW/2} ` +
+                                      `Z`;
+                                      
+                  // Calculate exact X coordinate on the Bezier curve for the current child's endY
+                  let exactStartX = cornerX;
+                  if (endY <= cuspY) {
+                    const denom = cuspY - minY;
+                    const t = denom > 0.1 ? (cuspY - endY) / denom : 0;
+                    const mt = 1 - t;
+                    exactStartX = mt * mt * mt * tipX + 3 * mt * mt * t * backX + 3 * mt * t * t * backX + t * t * t * cornerX;
+                  } else {
+                    const denom = maxY - cuspY;
+                    const t = denom > 0.1 ? (endY - cuspY) / denom : 0;
+                    const mt = 1 - t;
+                    exactStartX = mt * mt * mt * tipX + 3 * mt * mt * t * backX + 3 * mt * t * t * backX + t * t * t * cornerX;
+                  }
+
+                  const childPath = `M ${exactStartX} ${endY - endW/2} H ${endX} V ${endY + endW/2} H ${exactStartX} Z`;
+
+                  if (idx === 0) {
+                    path = `${parentPath} ${upperBranch} ${lowerBranch} ${childPath}`;
+                  } else {
+                    path = childPath;
+                  }
+                } else {
+                  if (idx === 0) {
+                    let parentLine = '';
+                    if (Math.abs(startY - cuspY) < 2) {
+                      parentLine = `M ${startX} ${startY} H ${tipX}`;
+                    } else {
+                      const cpX = startX + offsetTip * dir * 0.5;
+                      parentLine = `M ${startX} ${startY} C ${cpX} ${startY}, ${cpX} ${cuspY}, ${tipX} ${cuspY}`;
+                    }
+
+                    const bracePath = `${parentLine} ` +
+                                      `M ${tipX} ${cuspY} ` +
+                                      `Q ${backX} ${cuspY}, ${backX} ${cuspY - R} ` +
+                                      `V ${minY + R} ` +
+                                      `Q ${backX} ${minY}, ${cornerX} ${minY} ` +
+                                      `M ${tipX} ${cuspY} ` +
+                                      `Q ${backX} ${cuspY}, ${backX} ${cuspY + R} ` +
+                                      `V ${maxY - R} ` +
+                                      `Q ${backX} ${maxY}, ${cornerX} ${maxY}`;
+                    
+                    path = `${bracePath} M ${childStartX} ${endY} H ${endX}`;
+                  } else {
+                    path = `M ${childStartX} ${endY} H ${endX}`;
+                  }
+                }
+              }
+            }
           } else {
-            const controlXOffset = Math.min(100, Math.max(30, Math.abs(endX - startX) * 0.5));
-            const sign = isLeftGeom ? -1 : 1;
-            const cp1x = startX + controlXOffset * sign;
-            const cp1y = startY;
-            const cp2x = endX - controlXOffset * sign;
-            const cp2y = endY;
-            path = `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`;
+            const lineStyle = node.style?.lineStyle || 'curve';
+            if (lineStyle === 'straight') {
+              path = `M ${startX} ${startY} L ${endX} ${endY}`;
+            } else if (lineStyle === 'tapered') {
+              const controlXOffset = Math.min(100, Math.max(30, Math.abs(endX - startX) * 0.5));
+              const sign = isLeftGeom ? -1 : 1;
+              const isTopLevelBranch = node.id === 'root';
+              const startW = isTopLevelBranch ? 18 : 10;
+              const endW = 1.2;
+              
+              // Check if starting horizontally (connecting to top/bottom edge)
+              const isTopOrBottomEdge = (startY === pCoords.top || startY === pCoords.bottom);
+              
+              if (isTopOrBottomEdge) {
+                const isTopEdge = (startY === pCoords.top);
+                const controlYOffset = Math.min(100, Math.max(30, Math.abs(endY - startY) * 0.5));
+                
+                const startX_top = (endX > startX) ? (startX - startW / 2) : (startX + startW / 2);
+                const startX_bottom = (endX > startX) ? (startX + startW / 2) : (startX - startW / 2);
+                
+                const cp1x_top = startX_top;
+                const cp1y_top = isTopEdge ? (startY - controlYOffset) : (startY + controlYOffset);
+                const cp2x_top = endX - controlXOffset * sign;
+                const cp2y_top = endY - endW / 2;
+                
+                const cp2x_bottom = endX - controlXOffset * sign;
+                const cp2y_bottom = endY + endW / 2;
+                const cp1x_bottom = startX_bottom;
+                const cp1y_bottom = isTopEdge ? (startY - controlYOffset) : (startY + controlYOffset);
+                
+                path = `M ${startX_top} ${startY} ` +
+                       `C ${cp1x_top} ${cp1y_top}, ${cp2x_top} ${cp2y_top}, ${endX} ${endY - endW / 2} ` +
+                       `L ${endX} ${endY + endW / 2} ` +
+                       `C ${cp2x_bottom} ${cp2y_bottom}, ${cp1x_bottom} ${cp1y_bottom}, ${startX_bottom} ${startY} ` +
+                       `Z`;
+              } else {
+                const cp1x_top = startX + controlXOffset * sign;
+                const cp1y_top = startY - startW / 2;
+                const cp2x_top = endX - controlXOffset * sign;
+                const cp2y_top = endY - endW / 2;
+                
+                const cp2x_bottom = endX - controlXOffset * sign;
+                const cp2y_bottom = endY + endW / 2;
+                const cp1x_bottom = startX + controlXOffset * sign;
+                const cp1y_bottom = startY + startW / 2;
+                
+                path = `M ${startX} ${startY - startW / 2} ` +
+                       `C ${cp1x_top} ${cp1y_top}, ${cp2x_top} ${cp2y_top}, ${endX} ${endY - endW / 2} ` +
+                       `L ${endX} ${endY + endW / 2} ` +
+                       `C ${cp2x_bottom} ${cp2y_bottom}, ${cp1x_bottom} ${cp1y_bottom}, ${startX} ${startY + startW / 2} ` +
+                       `Z`;
+              }
+            } else {
+              const controlXOffset = Math.min(100, Math.max(30, Math.abs(endX - startX) * 0.5));
+              const sign = isLeftGeom ? -1 : 1;
+              
+              // Check if starting horizontally (connecting to top/bottom edge)
+              const isTopOrBottomEdge = (startY === pCoords.top || startY === pCoords.bottom);
+              
+              if (isTopOrBottomEdge) {
+                const isTopEdge = (startY === pCoords.top);
+                const controlYOffset = Math.min(100, Math.max(30, Math.abs(endY - startY) * 0.5));
+                
+                const cp1x = startX;
+                const cp1y = isTopEdge ? (startY - controlYOffset) : (startY + controlYOffset);
+                const cp2x = endX - controlXOffset * sign;
+                const cp2y = endY;
+                
+                path = `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`;
+              } else {
+                const cp1x = startX + controlXOffset * sign;
+                const cp1y = startY;
+                const cp2x = endX - controlXOffset * sign;
+                const cp2y = endY;
+                path = `M ${startX} ${startY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${endX} ${endY}`;
+              }
+            }
           }
 
           let lineBranchIndex = branchIndex;
@@ -282,10 +567,13 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
             ? themeBranchColors[lineBranchIndex % themeBranchColors.length]
             : themeLineColor;
 
+          const activeLineStyle = node.style?.lineStyle || 'curve';
           newLines.push({
             id: `${node.id}-${child.id}`,
             path,
-            color: strokeColor
+            color: strokeColor,
+            fill: activeLineStyle === 'tapered' ? strokeColor : 'none',
+            strokeWidth: activeLineStyle === 'tapered' ? 0.5 : 2.5
           });
 
           let childIsLeft = isLeft;
@@ -295,7 +583,7 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
             } else if (structure === 'logic') {
               childIsLeft = false;
             } else if (structure === 'mindmap') {
-              childIsLeft = (idx % 2 === 0);
+              childIsLeft = (cCoords.left + cCoords.width / 2 < pCoords.left + pCoords.width / 2);
             }
           } else {
             if (structure === 'logic-left') {
@@ -305,11 +593,11 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
             }
           }
 
-          traverse(child, lineBranchIndex, childIsLeft);
+          traverse(child, lineBranchIndex, childIsLeft, structure === 'timeline' ? 'brace' : structure);
         });
       };
 
-      traverse(tree, -1, false);
+      traverse(tree, -1, false, tree.style?.structure || 'logic');
       setLines(newLines);
 
       // 2. Calculate Subtree Boundaries (Bottom-up recursive card-union)
@@ -692,6 +980,7 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
         // Skip mutations that originate from the SVG itself or the relationship labels to avoid infinite loops
         const hasExternalMutation = mutations.some((m) => {
           const target = m.target as HTMLElement;
+          if (!target || typeof target.closest !== 'function') return true;
           return !target.closest('.svg-connections') && !target.closest('.relationship-label-card');
         });
         if (hasExternalMutation) {
@@ -810,8 +1099,9 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
             d={line.path}
             className="connection-path"
             stroke={line.color}
-            strokeWidth={2.5}
-            fill="none"
+            strokeWidth={line.strokeWidth !== undefined ? line.strokeWidth : 2.5}
+            fill={line.fill || 'none'}
+            style={{ fill: line.fill || 'none' }}
           />
         ))}
 

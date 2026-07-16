@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Folder, FileText, Plus, Edit2, Trash2, 
-  ChevronLeft, ChevronRight, Check, X 
+  ChevronLeft, ChevronRight, Check, X, GripVertical
 } from 'lucide-react';
 import type { MindMapMetadata } from '../hooks/useMindMap';
 import LogoImage from '../assets/mindsprout_logo_with_text.png';
@@ -13,6 +13,7 @@ interface MapListSidebarProps {
   onCreateNewMap: (title: string) => void;
   onDeleteMap: (id: string) => void;
   onRenameMap: (id: string, newTitle: string) => void;
+  onReorderMaps: (startIndex: number, endIndex: number) => void;
 }
 
 export const MapListSidebar: React.FC<MapListSidebarProps> = ({
@@ -21,11 +22,43 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
   onSwitchMap,
   onCreateNewMap,
   onDeleteMap,
-  onRenameMap
+  onRenameMap,
+  onReorderMaps
 }) => {
   const [isOpen, setIsOpen] = useState(true);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  
+  // Drag and drop states
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex !== index && dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== index) {
+      onReorderMaps(draggedIndex, index);
+    }
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
 
   const handleStartRename = (e: React.MouseEvent, id: string, currentTitle: string) => {
     e.stopPropagation();
@@ -188,7 +221,7 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
             paddingRight: '10px'
           }}
         >
-          {mapsList.map((map) => {
+          {mapsList.map((map, index) => {
             const isActive = map.id === activeMapId;
             const isRenaming = renamingId === map.id;
 
@@ -197,16 +230,29 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
                 key={map.id}
                 onClick={() => !isRenaming && onSwitchMap(map.id)}
                 className={`sidebar-map-item ${isActive ? 'active' : ''}`}
+                draggable={!isRenaming}
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDrop={(e) => handleDrop(e, index)}
+                onDragEnd={handleDragEnd}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '8px 10px',
                   borderRadius: '8px',
-                  cursor: isRenaming ? 'default' : 'pointer',
-                  transition: 'all 0.2s',
+                  cursor: isRenaming ? 'default' : (draggedIndex !== null ? 'grabbing' : 'pointer'),
+                  transition: 'all 0.2s, border-top 0.1s, border-bottom 0.1s',
                   backgroundColor: isActive ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
-                  border: isActive ? '1px solid var(--theme-glass-border)' : '1px solid transparent'
+                  opacity: draggedIndex === index ? 0.35 : 1,
+                  borderTop: (dragOverIndex === index && draggedIndex !== null && index < draggedIndex)
+                    ? '2px solid var(--theme-ui-accent-color)'
+                    : (isActive ? '1px solid var(--theme-glass-border)' : '1px solid transparent'),
+                  borderBottom: (dragOverIndex === index && draggedIndex !== null && index > draggedIndex)
+                    ? '2px solid var(--theme-ui-accent-color)'
+                    : (isActive ? '1px solid var(--theme-glass-border)' : '1px solid transparent'),
+                  borderLeft: isActive ? '1px solid var(--theme-glass-border)' : '1px solid transparent',
+                  borderRight: isActive ? '1px solid var(--theme-glass-border)' : '1px solid transparent'
                 }}
               >
                 {isRenaming ? (
@@ -244,7 +290,18 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
                   </div>
                 ) : (
                   <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden', flexGrow: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden', flexGrow: 1 }}>
+                      <GripVertical 
+                        size={14} 
+                        className="drag-grip"
+                        style={{ 
+                          cursor: 'grab', 
+                          color: 'var(--theme-text-color)', 
+                          opacity: 0.15,
+                          flexShrink: 0,
+                          transition: 'opacity 0.2s'
+                        }} 
+                      />
                       <FileText 
                         size={14} 
                         style={{ 
@@ -327,6 +384,13 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
         }
         .sidebar-map-item:hover .hover-action-btn {
           opacity: 0.6 !important;
+        }
+        .sidebar-map-item:hover .drag-grip {
+          opacity: 0.55 !important;
+        }
+        .sidebar-map-item .drag-grip:hover {
+          opacity: 0.95 !important;
+          color: var(--theme-ui-accent-color) !important;
         }
       `}</style>
     </>

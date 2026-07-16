@@ -3,7 +3,7 @@ import {
   Plus, GitBranch, Trash2, Undo2, Redo2, 
   ZoomIn, ZoomOut, Maximize, Download, 
   Upload, HelpCircle, FileText, Image as ImageIcon,
-  List, Map, Link2, Sun, Moon
+  List, Map, Link2, Sun, Moon, StickyNote
 } from 'lucide-react';
 import type { MindMapNode } from '../types/mindmap';
 import * as exportUtils from '../utils/exportUtils';
@@ -28,6 +28,7 @@ interface ToolbarProps {
   connectingSourceId?: string | null;
   onStartConnection?: (nodeId: string) => void;
   onCancelConnection?: () => void;
+  onAddNoteClick?: () => void;
   uiTheme: 'light' | 'dark';
   onToggleUiTheme: () => void;
 }
@@ -52,6 +53,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   connectingSourceId = null,
   onStartConnection,
   onCancelConnection,
+  onAddNoteClick,
   uiTheme,
   onToggleUiTheme
 }) => {
@@ -167,6 +169,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             <Link2 size={18} />
           </button>
         )}
+        <button
+          className="toolbar-button toolbar-note-btn"
+          disabled={!selectedId}
+          onClick={onAddNoteClick}
+          data-tooltip="編輯備註 📝"
+        >
+          <StickyNote size={18} />
+        </button>
       </div>
 
       <div className="toolbar-divider" />
@@ -237,14 +247,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           onClick={handleImportClick}
           data-tooltip="匯入 (JSON / Markdown)"
         >
-          <Upload size={18} />
+          <Download size={18} />
         </button>
         <button
           className="toolbar-button"
           onClick={() => exportUtils.exportToJson(tree, tree.text)}
           data-tooltip="匯出 JSON"
         >
-          <Download size={18} />
+          <Upload size={18} />
         </button>
         <button
           className="toolbar-button"
