@@ -435,15 +435,16 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
                   <button 
                     className="btn-secondary" 
                     onClick={onLogout} 
+                    title={t('logout')}
                     style={{ 
-                      padding: '2px 6px', 
-                      fontSize: '11px',
+                      padding: '4px 6px', 
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px'
+                      justifyContent: 'center',
+                      cursor: 'pointer'
                     }}
                   >
-                    <LogOut size={11} /> {t('logout')}
+                    <LogOut size={12} />
                   </button>
                 </div>
                 
