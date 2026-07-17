@@ -1134,6 +1134,25 @@ export const useMindMap = () => {
   }, []);
 
   const commitTreeState = useCallback((targetId?: string, finalOffset?: { x: number; y: number } | undefined) => {
+    if (targetId === 'root') {
+      const rootNodeInHistory = treeUtils.findNode(history.present, 'root');
+      const originalOffset = rootNodeInHistory?.offset || { x: 150, y: window.innerHeight / 2 - 40 };
+      
+      if (finalOffset) {
+        const dx = finalOffset.x - originalOffset.x;
+        const dy = finalOffset.y - originalOffset.y;
+
+        setTransform((prev) => ({
+          ...prev,
+          x: prev.x + dx * prev.zoom,
+          y: prev.y + dy * prev.zoom
+        }));
+      }
+
+      setTree((prevTree) => treeUtils.updateNode(prevTree, 'root', { offset: originalOffset }));
+      return;
+    }
+
     setTree((latestTree) => {
       let updatedTree = latestTree;
       if (targetId) {
@@ -1147,7 +1166,7 @@ export const useMindMap = () => {
       saveMapData(updatedTree);
       return updatedTree;
     });
-  }, [saveMapData]);
+  }, [saveMapData, history.present, setTransform]);
 
   const createFloatingNode = useCallback((x: number, y: number) => {
     const newId = treeUtils.generateId();
