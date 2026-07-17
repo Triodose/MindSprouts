@@ -532,8 +532,10 @@ export default function App() {
   const rootNode = tree.children.find((c) => c.id === 'root');
   const isTimelineMode = rootNode?.style?.structure === 'timeline';
 
+  const isHandDrawn = rootNode?.style?.handDrawn || false;
+
   return (
-    <div className="mindmap-app" style={appStyles}>
+    <div className={`mindmap-app ${isHandDrawn ? 'hand-drawn-active' : ''}`} style={appStyles}>
       {/* 1. Main Work Area (Canvas or Outliner) */}
       {isOutlinerMode ? (
         <Outliner
@@ -787,6 +789,15 @@ export default function App() {
           onClose={() => setActiveNoteNodeId(null)}
         />
       )}
+      {/* Hand-drawn SVG displacement filter for Excalidraw-like sketching */}
+      <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }}>
+        <defs>
+          <filter id="hand-drawn-filter" x="-10%" y="-10%" width="120%" height="120%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves={1} result="noise" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+        </defs>
+      </svg>
     </div>
   );
 }

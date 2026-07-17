@@ -558,6 +558,18 @@ export const Inspector: React.FC<InspectorProps> = ({
         </div>
 
         <div className="inspector-row" style={{ marginTop: '8px' }}>
+          <span className="inspector-label">{t('handDrawnMode')}</span>
+          <select
+            className="inspector-select"
+            value={tree.children.find((c) => c.id === 'root')?.style?.handDrawn ? 'true' : 'false'}
+            onChange={(e) => onUpdateStyle('root', { handDrawn: e.target.value === 'true' } as any)}
+          >
+            <option value="false">{t('handDrawnDisabled')}</option>
+            <option value="true">{t('handDrawnEnabled')}</option>
+          </select>
+        </div>
+
+        <div className="inspector-row" style={{ marginTop: '8px' }}>
           <span className="inspector-label">{t('autoLayout')}</span>
           <label className="toggle-switch">
             <input

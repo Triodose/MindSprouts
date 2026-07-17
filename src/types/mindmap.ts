@@ -8,6 +8,7 @@ export interface NodeStyle {
   shape?: 'rounded' | 'rectangle' | 'underlined' | 'diamond' | 'circle';
   structure?: 'logic' | 'org' | 'mindmap' | 'logic-left' | 'tree' | 'brace' | 'timeline' | 'fishbone';
   lineStyle?: 'curve' | 'straight' | 'tapered';
+  handDrawn?: boolean;
 }
 
 export interface Relationship {

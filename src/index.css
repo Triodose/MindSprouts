@@ -1582,3 +1582,46 @@ body {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
+
+/* --- Hand-drawn (Excalidraw) Mode Styles --- */
+@import url('https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Caveat:wght@400..700&display=swap');
+
+.hand-drawn-active,
+.hand-drawn-active .node-card,
+.hand-drawn-active .toolbar-button,
+.hand-drawn-active .sidebar-title,
+.hand-drawn-active .map-sidebar,
+.hand-drawn-active .inspector-panel,
+.hand-drawn-active .relationship-label-card,
+.hand-drawn-active .outliner-container,
+.hand-drawn-active input,
+.hand-drawn-active select,
+.hand-drawn-active textarea {
+  font-family: 'Caveat', 'Architects Daughter', 'DFKai-SB', cursive, sans-serif !important;
+}
+
+.hand-drawn-active .node-card {
+  filter: url(#hand-drawn-filter);
+}
+
+.hand-drawn-active .svg-connections path,
+.hand-drawn-active .svg-connections rect {
+  filter: url(#hand-drawn-filter);
+}
+
+.hand-drawn-active .connection-path,
+.hand-drawn-active .svg-connections path {
+  stroke-width: 2.2px !important;
+}
+
+.hand-drawn-active .node-card-depth-0 {
+  border-width: 2.5px !important;
+}
+
+.hand-drawn-active .node-card-depth-1 {
+  border-width: 2px !important;
+}
+
+.hand-drawn-active .node-card-depth-2 {
+  border-width: 2px !important;
+}
