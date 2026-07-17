@@ -362,6 +362,16 @@ export const useMindMap = () => {
     const isConnected = localStorage.getItem('google_drive_connected') === 'true';
     if (isConnected) {
       if (!googleAccessToken) {
+        // Connected but waiting for Google access token (e.g. initial load / silent refresh)
+        // Load the local cache first so user does not see a blank sidebar
+        const localMaps = getLocalMaps();
+        const list = localMaps.map((m) => ({
+          id: m.id,
+          title: m.title,
+          updated_at: m.updated_at
+        }));
+        setMapsList(applyCustomSort(list));
+        setIsMapsListLoaded(true);
         return;
       }
       setIsSyncing(true);
