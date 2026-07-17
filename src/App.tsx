@@ -163,7 +163,6 @@ export default function App() {
     transform,
     theme,
     user,
-    isSyncing,
     history,
     mapsList,
     activeMapId,
