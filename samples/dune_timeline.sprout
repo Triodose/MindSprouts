@@ -1,0 +1,104 @@
+{
+  "id": "dune_timeline",
+  "title": "Dune Timeline",
+  "content": {
+    "id": "virtual-root",
+    "text": "Virtual Root",
+    "children": [
+      {
+        "id": "root",
+        "text": "Dune Novel Timeline",
+        "offset": {
+          "x": 100,
+          "y": 300
+        },
+        "style": {
+          "structure": "timeline",
+          "shape": "underlined"
+        },
+        "children": [
+          {
+            "id": "dune-caladan",
+            "text": "1. Arrival on Arrakis (10191 AG)",
+            "children": [
+              {
+                "id": "dune-transfer",
+                "text": "House Atreides relocates from Caladan to Arrakis to take control of Spice mining.",
+                "children": []
+              },
+              {
+                "id": "dune-trap",
+                "text": "Baron Harkonnen conspires with Emperor Shaddam IV to destroy House Atreides.",
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "dune-attack",
+            "text": "2. Harkonnen Invasion & Betrayal",
+            "children": [
+              {
+                "id": "dune-leto",
+                "text": "Duke Leto Atreides is betrayed by Dr. Yueh and murdered by the Baron.",
+                "children": []
+              },
+              {
+                "id": "dune-escape",
+                "text": "Paul Atreides and Lady Jessica escape into the deep desert.",
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "dune-fremen",
+            "text": "3. Acceptance by the Fremen",
+            "children": [
+              {
+                "id": "dune-stilgar",
+                "text": "Paul meets Stilgar, fights Jamis, and adopts the Fremen name Muad'Dib.",
+                "children": []
+              },
+              {
+                "id": "dune-water",
+                "text": "Jessica drinks the Water of Life and becomes the Fremen Reverend Mother.",
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "dune-rebellion",
+            "text": "4. Rise of Muad'Dib & Jihad",
+            "children": [
+              {
+                "id": "dune-guerrilla",
+                "text": "Paul trains Fremen in Atreides battle tactics and cripples Spice production.",
+                "children": []
+              },
+              {
+                "id": "dune-prescience",
+                "text": "Paul drinks the Water of Life, surviving to achieve full prescient consciousness.",
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "dune-victory",
+            "text": "5. The Battle of Arrakeen (10193 AG)",
+            "children": [
+              {
+                "id": "dune-worms",
+                "text": "Fremen launch massive attack on Arrakeen riding giant sandworms.",
+                "children": []
+              },
+              {
+                "id": "dune-emperor",
+                "text": "Paul defeats Feyd-Rautha in single combat and deposes the Emperor to take the throne.",
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

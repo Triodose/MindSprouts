@@ -1,0 +1,138 @@
+{
+  "id": "stock_investment_theories",
+  "title": "Stock Investment Theories",
+  "content": {
+    "id": "virtual-root",
+    "text": "Virtual Root",
+    "children": [
+      {
+        "id": "root",
+        "text": "Stock Market Investment Theories",
+        "offset": {
+          "x": 150,
+          "y": 100
+        },
+        "style": {
+          "structure": "org",
+          "shape": "rectangle"
+        },
+        "children": [
+          {
+            "id": "stock-fundamental",
+            "text": "Fundamental Analysis",
+            "children": [
+              {
+                "id": "stock-value",
+                "text": "Value Investing (Graham/Buffett)",
+                "children": [
+                  {
+                    "id": "stock-intrinsic",
+                    "text": "Intrinsic Value Estimation",
+                    "children": []
+                  },
+                  {
+                    "id": "stock-safety",
+                    "text": "Margin of Safety principle",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "stock-growth",
+                "text": "Growth Investing (Fisher/Lynch)",
+                "children": [
+                  {
+                    "id": "stock-growth-rate",
+                    "text": "High Earnings Growth Rate",
+                    "children": []
+                  },
+                  {
+                    "id": "stock-peg",
+                    "text": "PEG Ratio Assessment",
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "stock-technical",
+            "text": "Technical Analysis",
+            "children": [
+              {
+                "id": "stock-trend",
+                "text": "Trend Following (Dow Theory)",
+                "children": [
+                  {
+                    "id": "stock-ma",
+                    "text": "Moving Averages (50/200 DMA)",
+                    "children": []
+                  },
+                  {
+                    "id": "stock-sr",
+                    "text": "Support and Resistance Levels",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "stock-charting",
+                "text": "Pattern Recognition (Chartists)",
+                "children": [
+                  {
+                    "id": "stock-reversal",
+                    "text": "Reversal Patterns (Head & Shoulders)",
+                    "children": []
+                  },
+                  {
+                    "id": "stock-continue",
+                    "text": "Continuation Patterns (Cup & Handle)",
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "stock-quant",
+            "text": "Quantitative Analysis",
+            "children": [
+              {
+                "id": "stock-mpt",
+                "text": "Modern Portfolio Theory (Markowitz)",
+                "children": [
+                  {
+                    "id": "stock-diversify",
+                    "text": "Asset Diversification",
+                    "children": []
+                  },
+                  {
+                    "id": "stock-frontier",
+                    "text": "Efficient Frontier Optimization",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "stock-algo",
+                "text": "Algorithmic & Model Trading",
+                "children": [
+                  {
+                    "id": "stock-hft",
+                    "text": "High-Frequency Trading (HFT)",
+                    "children": []
+                  },
+                  {
+                    "id": "stock-arbitrage",
+                    "text": "Statistical Arbitrage Models",
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,134 @@
+{
+  "id": "harry_potter_relationships",
+  "title": "Harry Potter Relationships",
+  "content": {
+    "id": "virtual-root",
+    "text": "Virtual Root",
+    "children": [
+      {
+        "id": "root",
+        "text": "Harry Potter Character Relationships",
+        "offset": {
+          "x": 150,
+          "y": 300
+        },
+        "style": {
+          "structure": "mindmap",
+          "shape": "rounded"
+        },
+        "children": [
+          {
+            "id": "hp-trio",
+            "text": "The Golden Trio (Gryffindor)",
+            "children": [
+              {
+                "id": "hp-harry",
+                "text": "Harry Potter (The Boy Who Lived)",
+                "children": []
+              },
+              {
+                "id": "hp-ron",
+                "text": "Ron Weasley (Loyal Best Friend)",
+                "children": []
+              },
+              {
+                "id": "hp-hermione",
+                "text": "Hermione Granger (The Brightest Witch)",
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "hp-hogwarts",
+            "text": "Hogwarts Mentors & Staff",
+            "children": [
+              {
+                "id": "hp-dumbledore",
+                "text": "Albus Dumbledore (Headmaster)",
+                "children": []
+              },
+              {
+                "id": "hp-mcgonagall",
+                "text": "Minerva McGonagall (Transfiguration)",
+                "children": []
+              },
+              {
+                "id": "hp-snape",
+                "text": "Severus Snape (Potions Master / Double Agent)",
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "hp-antagonists",
+            "text": "Dark Side & Antagonists",
+            "children": [
+              {
+                "id": "hp-voldemort",
+                "text": "Lord Voldemort (Dark Lord / Tom Riddle)",
+                "children": []
+              },
+              {
+                "id": "hp-bellatrix",
+                "text": "Bellatrix Lestrange (Fanatical Follower)",
+                "children": []
+              },
+              {
+                "id": "hp-draco",
+                "text": "Draco Malfoy (Hogwarts Rival / Death Eater)",
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "hp-allies",
+            "text": "Order of the Phoenix & Allies",
+            "children": [
+              {
+                "id": "hp-sirius",
+                "text": "Sirius Black (Harry's Godfather)",
+                "children": []
+              },
+              {
+                "id": "hp-lupin",
+                "text": "Remus Lupin (DADA Teacher / Werewolf)",
+                "children": []
+              },
+              {
+                "id": "hp-hagrid",
+                "text": "Rubeus Hagrid (Keeper of Keys & Grounds)",
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "id": "rel-hp-1",
+        "fromId": "hp-harry",
+        "toId": "hp-voldemort",
+        "text": "Arch-Enemies / Prophesied Rivals"
+      },
+      {
+        "id": "rel-hp-2",
+        "fromId": "hp-snape",
+        "toId": "hp-harry",
+        "text": "Secretly Protects (Lily's Memory)"
+      },
+      {
+        "id": "rel-hp-3",
+        "fromId": "hp-dumbledore",
+        "toId": "hp-harry",
+        "text": "Mentor & Guide"
+      },
+      {
+        "id": "rel-hp-4",
+        "fromId": "hp-ron",
+        "toId": "hp-hermione",
+        "text": "Romantically Linked / Spouses later"
+      }
+    ]
+  }
+}
