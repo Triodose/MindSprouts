@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { MindMapNode, MindMapTheme } from '../types/mindmap';
 import { THEMES } from '../utils/themes';
-import { LogIn, LogOut, Cloud, CloudOff, RefreshCw, Flag, Star, Heart, HelpCircle, Info, Clock, AlertCircle } from 'lucide-react';
+import { Flag, Star, Heart, HelpCircle, Info } from 'lucide-react';
 import { findParent } from '../utils/treeUtils';
 import { useI18n } from '../context/I18nContext';
 
@@ -10,18 +10,12 @@ interface InspectorProps {
   selectedNode: MindMapNode | null;
   tree: MindMapNode;
   theme: MindMapTheme;
-  user: any;
-  isSyncing: boolean;
-  syncStatus?: 'saved' | 'dirty' | 'syncing' | 'error';
-  isGoogleDriveConfigured: boolean;
   isAutoLayout: boolean;
   onToggleAutoLayout: (active: boolean) => void;
   onUpdateStyle: (id: string, style: Partial<MindMapNode['style']>) => void;
   onApplyStyleToLevel: (id: string, style: Partial<MindMapNode['style']>) => void;
   onUpdateData: (id: string, data: Partial<MindMapNode>) => void;
   onChangeTheme: (theme: MindMapTheme) => void;
-  onLogin: () => void;
-  onLogout: () => void;
   onAddSummary?: (startNodeId: string, endNodeId: string) => void;
   onUpdateSummaryRange?: (summaryId: string, startNodeId: string, endNodeId: string) => void;
   onDeleteSummary?: (summaryId: string) => void;
@@ -85,17 +79,12 @@ export const Inspector: React.FC<InspectorProps> = ({
   selectedNode,
   tree,
   theme,
-  user,
-  syncStatus = 'saved',
-  isGoogleDriveConfigured,
   isAutoLayout,
   onToggleAutoLayout,
   onUpdateStyle,
   onApplyStyleToLevel,
   onUpdateData,
   onChangeTheme,
-  onLogin,
-  onLogout,
   onAddSummary,
   onUpdateSummaryRange,
   onDeleteSummary
@@ -1254,75 +1243,7 @@ export const Inspector: React.FC<InspectorProps> = ({
           </div>
         )}
       </div>
-
-      {/* 3. Google Drive Auth Integration */}
-      <div className="inspector-section" style={{ borderTop: '1px solid var(--theme-glass-border)', paddingTop: '20px', marginBottom: 0 }}>
-        <div className="inspector-title">{t('syncStatusTitle')}</div>
-        <div className="auth-panel">
-          {!isGoogleDriveConfigured ? (
-            <div className="db-status-pill db-status-offline" style={{ alignSelf: 'start', marginBottom: '8px' }}>
-              <CloudOff size={14} /> {t('syncStatusLocal')}
-            </div>
-          ) : user ? (
-            <>
-              <div className="user-profile">
-                <img
-                  src={user.user_metadata?.avatar_url || 'https://www.gravatar.com/avatar?d=mp'}
-                  alt="Avatar"
-                  className="user-avatar"
-                />
-                <span className="user-email" title={user.email}>
-                  {user.email}
-                </span>
-              </div>
-              <div className="inspector-row" style={{ margin: 0 }}>
-                {syncStatus === 'syncing' && (
-                  <div className="db-status-pill" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>
-                    <RefreshCw size={12} className="spin" style={{ animation: 'spin 1.5s linear infinite' }} />
-                    {t('syncStatusSyncing')}
-                  </div>
-                )}
-                {syncStatus === 'dirty' && (
-                  <div className="db-status-pill" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
-                    <Clock size={12} />
-                    {t('syncStatusDirty')}
-                  </div>
-                )}
-                {syncStatus === 'error' && (
-                  <div className="db-status-pill" style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>
-                    <AlertCircle size={12} />
-                    {t('syncStatusError')}
-                  </div>
-                )}
-                {syncStatus === 'saved' && (
-                  <div className="db-status-pill db-status-online">
-                    <Cloud size={14} /> {t('syncStatusConnected')}
-                  </div>
-                )}
-                <button className="btn-secondary" onClick={onLogout} style={{ padding: '4px 8px', fontSize: '12px' }}>
-                  <LogOut size={12} /> {t('logout')}
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ fontSize: '12px', opacity: 0.7, marginBottom: '8px' }}>
-                {t('syncPrompt')}
-              </div>
-              <button className="btn-primary" onClick={onLogin}>
-                <LogIn size={14} /> {t('connectDrive')}
-              </button>
-            </>
-          )}
-        </div>
       </div>
-
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 };

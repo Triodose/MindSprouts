@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
   Folder, FileText, Plus, Edit2, Trash2, 
-  ChevronLeft, ChevronRight, Check, X, GripVertical
+  ChevronLeft, ChevronRight, Check, X, GripVertical,
+  CloudOff, RefreshCw, Clock, AlertCircle, Cloud, LogOut, LogIn
 } from 'lucide-react';
 import type { MindMapMetadata } from '../hooks/useMindMap';
 import LogoImage from '../assets/mindsprout_logo_with_text.png';
@@ -15,6 +16,11 @@ interface MapListSidebarProps {
   onDeleteMap: (id: string) => void;
   onRenameMap: (id: string, newTitle: string) => void;
   onReorderMaps: (startIndex: number, endIndex: number) => void;
+  isGoogleDriveConfigured: boolean;
+  user: any;
+  syncStatus: 'saved' | 'dirty' | 'syncing' | 'error';
+  onLogin: () => void;
+  onLogout: () => void;
 }
 
 export const MapListSidebar: React.FC<MapListSidebarProps> = ({
@@ -24,7 +30,12 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
   onCreateNewMap,
   onDeleteMap,
   onRenameMap,
-  onReorderMaps
+  onReorderMaps,
+  isGoogleDriveConfigured,
+  user,
+  syncStatus,
+  onLogin,
+  onLogout
 }) => {
   const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(true);
@@ -368,6 +379,123 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
               </div>
             );
           })}
+        </div>
+
+        {/* Google Drive Auth Integration */}
+        <div 
+          style={{ 
+            borderTop: '1px solid var(--theme-glass-border)', 
+            paddingTop: '16px', 
+            marginTop: '16px',
+            boxSizing: 'border-box'
+          }}
+        >
+          <div 
+            style={{ 
+              fontSize: '11px', 
+              fontWeight: 600, 
+              textTransform: 'uppercase', 
+              letterSpacing: '0.05em', 
+              color: 'var(--theme-ui-accent-color)', 
+              marginBottom: '8px' 
+            }}
+          >
+            {t('syncStatusTitle')}
+          </div>
+          <div className="auth-panel">
+            {!isGoogleDriveConfigured ? (
+              <div className="db-status-pill db-status-offline" style={{ alignSelf: 'start' }}>
+                <CloudOff size={14} /> {t('syncStatusLocal')}
+              </div>
+            ) : user ? (
+              <>
+                <div className="user-profile" style={{ margin: 0, justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                    <img
+                      src={user.user_metadata?.avatar_url || 'https://www.gravatar.com/avatar?d=mp'}
+                      alt="Avatar"
+                      className="user-avatar"
+                      style={{ width: '24px', height: '24px' }}
+                    />
+                    <span 
+                      className="user-email" 
+                      title={user.email}
+                      style={{ 
+                        fontSize: '12px', 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis', 
+                        whiteSpace: 'nowrap',
+                        maxWidth: '120px',
+                        opacity: 0.8
+                      }}
+                    >
+                      {user.email}
+                    </span>
+                  </div>
+                  <button 
+                    className="btn-secondary" 
+                    onClick={onLogout} 
+                    style={{ 
+                      padding: '2px 6px', 
+                      fontSize: '11px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <LogOut size={11} /> {t('logout')}
+                  </button>
+                </div>
+                
+                <div style={{ display: 'flex', alignItems: 'center', marginTop: '6px' }}>
+                  {syncStatus === 'syncing' && (
+                    <div className="db-status-pill" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', width: '100%', justifyContent: 'center' }}>
+                      <RefreshCw size={12} className="spin" style={{ animation: 'spin 1.5s linear infinite' }} />
+                      {t('syncStatusSyncing')}
+                    </div>
+                  )}
+                  {syncStatus === 'dirty' && (
+                    <div className="db-status-pill" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', width: '100%', justifyContent: 'center' }}>
+                      <Clock size={12} />
+                      {t('syncStatusDirty')}
+                    </div>
+                  )}
+                  {syncStatus === 'error' && (
+                    <div className="db-status-pill" style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', width: '100%', justifyContent: 'center' }}>
+                      <AlertCircle size={12} />
+                      {t('syncStatusError')}
+                    </div>
+                  )}
+                  {syncStatus === 'saved' && (
+                    <div className="db-status-pill db-status-online" style={{ width: '100%', justifyContent: 'center' }}>
+                      <Cloud size={14} /> {t('syncStatusConnected')}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: '6px', lineHeight: '1.4' }}>
+                  {t('syncPrompt')}
+                </div>
+                <button 
+                  className="btn-primary" 
+                  onClick={onLogin}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <LogIn size={14} /> {t('connectDrive')}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

@@ -718,6 +718,11 @@ export default function App() {
         onDeleteMap={deleteMap}
         onRenameMap={renameMap}
         onReorderMaps={reorderMapsList}
+        isGoogleDriveConfigured={isGoogleDriveConfigured}
+        user={user}
+        syncStatus={syncStatus}
+        onLogin={loginWithGoogle}
+        onLogout={logout}
       />
 
       {/* Top Toolbar */}
@@ -755,18 +760,12 @@ export default function App() {
         selectedNode={selectedNodeDetail}
         tree={tree}
         theme={theme}
-        user={user}
-        isSyncing={isSyncing}
-        syncStatus={syncStatus}
-        isGoogleDriveConfigured={isGoogleDriveConfigured}
         isAutoLayout={isAutoLayout}
         onToggleAutoLayout={toggleAutoLayout}
         onUpdateStyle={updateNodeStyle}
         onApplyStyleToLevel={applyStyleToLevel}
         onUpdateData={updateNodeData}
         onChangeTheme={changeTheme}
-        onLogin={loginWithGoogle}
-        onLogout={logout}
         onAddSummary={addSummary}
         onUpdateSummaryRange={updateSummaryRange}
         onDeleteSummary={deleteSummary}
