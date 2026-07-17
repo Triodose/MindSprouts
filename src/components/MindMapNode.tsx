@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Globe, Flag, Star, Heart, HelpCircle, Info, List } from 'lucide-react';
 import type { MindMapNode as MindMapNodeType, MindMapTheme } from '../types/mindmap';
+import { useI18n } from '../context/I18nContext';
 
 interface MindMapNodeProps {
   node: MindMapNodeType;

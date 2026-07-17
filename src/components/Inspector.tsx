@@ -1243,7 +1243,6 @@ export const Inspector: React.FC<InspectorProps> = ({
           </div>
         )}
       </div>
-      </div>
     </div>
   );
 };

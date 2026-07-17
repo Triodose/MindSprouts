@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import type { MindMapNode } from '../types/mindmap';
 import * as exportUtils from '../utils/exportUtils';
-import { useI18n, Language } from '../context/I18nContext';
+import { useI18n } from '../context/I18nContext';
+import type { Language } from '../context/I18nContext';
 
 interface ToolbarProps {
   selectedId: string | null;
