@@ -140,7 +140,7 @@ const translations = {
     setTransparent: '設為透明',
     mindmapConfig: '心智圖配置',
     mapLayout: '地圖排版結構',
-    handDrawnMode: '手繪風格 (Hand-drawn)',
+    handDrawnMode: '手繪風格',
     handDrawnEnabled: '手繪草稿風',
     handDrawnDisabled: '標準現代風',
     nodeStyleSettings: '節點樣式設定',
