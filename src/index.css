@@ -1623,3 +1623,39 @@ body {
 .hand-drawn-active .node-card-depth-2 {
   border-width: 2px !important;
 }
+
+/* Inspector Tabs Segmented Control styling */
+.inspector-tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--theme-glass-border);
+  border-radius: 8px;
+  padding: 3px;
+  margin-bottom: 20px;
+}
+
+.inspector-tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--theme-text-color);
+  opacity: 0.65;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: inherit;
+}
+
+.inspector-tab-btn:hover {
+  opacity: 0.95;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.inspector-tab-btn.active {
+  opacity: 1;
+  background: var(--theme-ui-accent-color);
+  color: #ffffff;
+}

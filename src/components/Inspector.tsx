@@ -92,6 +92,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   const { t } = useI18n();
   const rootNode = tree.children.find((c) => c.id === 'root');
   const isTimelineMode = rootNode?.style?.structure === 'timeline';
+  const [activeTab, setActiveTab] = React.useState<'node' | 'map'>('node');
 
   const renderProgressIconSvg = (progress: number) => {
     const radius = 3;
@@ -515,76 +516,95 @@ export const Inspector: React.FC<InspectorProps> = ({
           onClick={() => setActivePicker(null)} 
         />
       )}
-      {/* 1. Workspace Theme */}
-      <div className="inspector-section">
-        <div className="inspector-title">{t('mindmapConfig')}</div>
-        
-        <div className="inspector-row">
-          <span className="inspector-label">{t('themeSelect')}</span>
-          <select
-            className="inspector-select"
-            value={theme.id}
-            onChange={(e) => {
-              const selected = THEMES.find((t) => t.id === e.target.value);
-              if (selected) onChangeTheme(selected);
-            }}
-          >
-            {THEMES.map((themeItem) => (
-              <option key={themeItem.id} value={themeItem.id}>
-                {t('theme_' + themeItem.id.split('-')[0]) !== 'theme_' + themeItem.id.split('-')[0]
-                  ? t('theme_' + themeItem.id.split('-')[0])
-                  : themeItem.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="inspector-row" style={{ marginTop: '8px' }}>
-          <span className="inspector-label">{t('mapLayout')}</span>
-          <select
-            className="inspector-select"
-            value={tree.children.find((c) => c.id === 'root')?.style?.structure || 'logic'}
-            onChange={(e) => onUpdateStyle('root', { structure: e.target.value as any })}
-          >
-            <option value="mindmap">{t('structureMindmap')} (Mind Map)</option>
-            <option value="logic">{t('structureLogicRight')} (Logic Right)</option>
-            <option value="logic-left">{t('structureLogicLeft')} (Logic Left)</option>
-            <option value="org">{t('structureOrg')} (Org Chart)</option>
-            <option value="tree">{t('structureTree')} (Tree Chart)</option>
-            <option value="brace">{t('structureBrace')} (Brace Map)</option>
-            <option value="timeline">{t('structureTimeline')} (Timeline)</option>
-            <option value="fishbone">{t('structureFishbone')} (Fishbone)</option>
-          </select>
-        </div>
-
-        <div className="inspector-row" style={{ marginTop: '8px' }}>
-          <span className="inspector-label">{t('handDrawnMode')}</span>
-          <select
-            className="inspector-select"
-            value={tree.children.find((c) => c.id === 'root')?.style?.handDrawn ? 'true' : 'false'}
-            onChange={(e) => onUpdateStyle('root', { handDrawn: e.target.value === 'true' } as any)}
-          >
-            <option value="false">{t('handDrawnDisabled')}</option>
-            <option value="true">{t('handDrawnEnabled')}</option>
-          </select>
-        </div>
-
-        <div className="inspector-row" style={{ marginTop: '8px' }}>
-          <span className="inspector-label">{t('autoLayout')}</span>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              checked={isAutoLayout}
-              onChange={(e) => onToggleAutoLayout(e.target.checked)}
-            />
-            <span className="toggle-slider" />
-          </label>
-        </div>
+      {/* Tabs Header */}
+      <div className="inspector-tabs">
+        <button
+          className={`inspector-tab-btn ${activeTab === 'node' ? 'active' : ''}`}
+          onClick={() => setActiveTab('node')}
+        >
+          {t('properties')}
+        </button>
+        <button
+          className={`inspector-tab-btn ${activeTab === 'map' ? 'active' : ''}`}
+          onClick={() => setActiveTab('map')}
+        >
+          {t('mindmapConfig')}
+        </button>
       </div>
 
+      {/* 1. Workspace Theme */}
+      {activeTab === 'map' && (
+        <div className="inspector-section">
+          <div className="inspector-title">{t('mindmapConfig')}</div>
+          
+          <div className="inspector-row">
+            <span className="inspector-label">{t('themeSelect')}</span>
+            <select
+              className="inspector-select"
+              value={theme.id}
+              onChange={(e) => {
+                const selected = THEMES.find((t) => t.id === e.target.value);
+                if (selected) onChangeTheme(selected);
+              }}
+            >
+              {THEMES.map((themeItem) => (
+                <option key={themeItem.id} value={themeItem.id}>
+                  {t('theme_' + themeItem.id.split('-')[0]) !== 'theme_' + themeItem.id.split('-')[0]
+                    ? t('theme_' + themeItem.id.split('-')[0])
+                    : themeItem.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="inspector-row" style={{ marginTop: '8px' }}>
+            <span className="inspector-label">{t('mapLayout')}</span>
+            <select
+              className="inspector-select"
+              value={tree.children.find((c) => c.id === 'root')?.style?.structure || 'logic'}
+              onChange={(e) => onUpdateStyle('root', { structure: e.target.value as any })}
+            >
+              <option value="mindmap">{t('structureMindmap')} (Mind Map)</option>
+              <option value="logic">{t('structureLogicRight')} (Logic Right)</option>
+              <option value="logic-left">{t('structureLogicLeft')} (Logic Left)</option>
+              <option value="org">{t('structureOrg')} (Org Chart)</option>
+              <option value="tree">{t('structureTree')} (Tree Chart)</option>
+              <option value="brace">{t('structureBrace')} (Brace Map)</option>
+              <option value="timeline">{t('structureTimeline')} (Timeline)</option>
+              <option value="fishbone">{t('structureFishbone')} (Fishbone)</option>
+            </select>
+          </div>
+
+          <div className="inspector-row" style={{ marginTop: '8px' }}>
+            <span className="inspector-label">{t('handDrawnMode')}</span>
+            <select
+              className="inspector-select"
+              value={tree.children.find((c) => c.id === 'root')?.style?.handDrawn ? 'true' : 'false'}
+              onChange={(e) => onUpdateStyle('root', { handDrawn: e.target.value === 'true' } as any)}
+            >
+              <option value="false">{t('handDrawnDisabled')}</option>
+              <option value="true">{t('handDrawnEnabled')}</option>
+            </select>
+          </div>
+
+          <div className="inspector-row" style={{ marginTop: '8px' }}>
+            <span className="inspector-label">{t('autoLayout')}</span>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={isAutoLayout}
+                onChange={(e) => onToggleAutoLayout(e.target.checked)}
+              />
+              <span className="toggle-slider" />
+            </label>
+          </div>
+        </div>
+      )}
+
       {/* 2. Selected Node Styles */}
-      <div className="inspector-section" style={{ flexGrow: 1 }}>
-        <div className="inspector-title">{t('nodeStyleSettings')}</div>
+      {activeTab === 'node' && (
+        <div className="inspector-section" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+          <div className="inspector-title">{t('nodeStyleSettings')}</div>
         {selectedNode ? (
           <>
             <div className="inspector-row">
@@ -1250,11 +1270,12 @@ export const Inspector: React.FC<InspectorProps> = ({
             )}
           </>
         ) : (
-          <div style={{ fontSize: '13px', opacity: 0.5, textAlign: 'center', marginTop: '20px' }}>
+          <div style={{ fontSize: '13px', opacity: 0.5, textAlign: 'center', marginTop: '40px' }}>
             {t('selectNodePrompt')}
           </div>
         )}
       </div>
+      )}
     </div>
   );
 };
