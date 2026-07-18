@@ -1624,38 +1624,55 @@ body {
   border-width: 2px !important;
 }
 
-/* Inspector Tabs Segmented Control styling */
+/* Inspector Tabs styling (User mockup matched) */
 .inspector-tabs {
   display: flex;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--theme-glass-border);
-  border-radius: 8px;
-  padding: 3px;
+  border-bottom: 1px solid var(--theme-glass-border);
   margin-bottom: 20px;
+  gap: 6px;
+  padding-bottom: 0;
 }
 
 .inspector-tab-btn {
-  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
+  border-bottom: none;
   color: var(--theme-text-color);
-  opacity: 0.65;
-  padding: 8px 12px;
+  opacity: 0.55;
+  padding: 8px 16px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 8px 8px 0 0;
+  transition: all 0.15s ease-in-out;
   font-family: inherit;
+  margin-bottom: -1px; /* Overlap with the container bottom border */
+  flex: 1;
+}
+
+.inspector-tab-btn .tab-icon {
+  opacity: 0.7;
+  transition: color 0.15s ease;
 }
 
 .inspector-tab-btn:hover {
-  opacity: 0.95;
-  background: rgba(255, 255, 255, 0.05);
+  opacity: 0.85;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .inspector-tab-btn.active {
   opacity: 1;
-  background: var(--theme-ui-accent-color);
-  color: #ffffff;
+  background: var(--theme-glass-background);
+  border-color: var(--theme-glass-border);
+  color: var(--theme-ui-accent-color);
+  border-bottom: 1.5px solid var(--theme-glass-background) !important; /* Hide bottom line */
+}
+
+.inspector-tab-btn.active .tab-icon {
+  color: var(--theme-ui-accent-color);
+  opacity: 1;
 }

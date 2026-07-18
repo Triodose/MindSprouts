@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { MindMapNode, MindMapTheme } from '../types/mindmap';
 import { THEMES } from '../utils/themes';
-import { Flag, Star, Heart, HelpCircle, Info } from 'lucide-react';
+import { Flag, Star, Heart, HelpCircle, Info, Sliders, Settings } from 'lucide-react';
 import { findParent } from '../utils/treeUtils';
 import { useI18n } from '../context/I18nContext';
 
@@ -522,13 +522,15 @@ export const Inspector: React.FC<InspectorProps> = ({
           className={`inspector-tab-btn ${activeTab === 'node' ? 'active' : ''}`}
           onClick={() => setActiveTab('node')}
         >
-          {t('properties')}
+          <Sliders size={14} className="tab-icon" />
+          <span>{t('properties')}</span>
         </button>
         <button
           className={`inspector-tab-btn ${activeTab === 'map' ? 'active' : ''}`}
           onClick={() => setActiveTab('map')}
         >
-          {t('mindmapConfig')}
+          <Settings size={14} className="tab-icon" />
+          <span>{t('mindmapConfig')}</span>
         </button>
       </div>
 
