@@ -1586,17 +1586,14 @@ body {
 /* --- Hand-drawn (Excalidraw) Mode Styles --- */
 @import url('https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Caveat:wght@400..700&display=swap');
 
-.hand-drawn-active,
 .hand-drawn-active .node-card,
-.hand-drawn-active .toolbar-button,
-.hand-drawn-active .sidebar-title,
-.hand-drawn-active .map-sidebar,
-.hand-drawn-active .inspector-panel,
+.hand-drawn-active .node-card input,
+.hand-drawn-active .node-card textarea,
 .hand-drawn-active .relationship-label-card,
+.hand-drawn-active .relationship-label-input,
+.hand-drawn-active .boundary-title-text,
 .hand-drawn-active .outliner-container,
-.hand-drawn-active input,
-.hand-drawn-active select,
-.hand-drawn-active textarea {
+.hand-drawn-active .outliner-input {
   font-family: 'Caveat', 'Architects Daughter', 'DFKai-SB', cursive, sans-serif !important;
 }
 

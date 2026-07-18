@@ -792,7 +792,7 @@ export default function App() {
       {/* Hand-drawn SVG displacement filter for Excalidraw-like sketching */}
       <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }}>
         <defs>
-          <filter id="hand-drawn-filter" x="-10%" y="-10%" width="120%" height="120%">
+          <filter id="hand-drawn-filter" filterUnits="userSpaceOnUse" x="-5000" y="-5000" width="10000" height="10000">
             <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves={1} result="noise" />
             <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
           </filter>
