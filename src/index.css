@@ -1585,6 +1585,7 @@ body {
 
 /* --- Hand-drawn (Excalidraw) Mode Styles --- */
 @import url('https://fonts.googleapis.com/css2?family=Architects+Daughter&family=Caveat:wght@400..700&display=swap');
+@import url('https://font.emtech.cc/css/xiaolai');
 
 .hand-drawn-active .node-card,
 .hand-drawn-active .node-card input,
@@ -1594,7 +1595,7 @@ body {
 .hand-drawn-active .boundary-title-text,
 .hand-drawn-active .outliner-container,
 .hand-drawn-active .outliner-input {
-  font-family: 'Caveat', 'Architects Daughter', 'DFKai-SB', cursive, sans-serif !important;
+  font-family: 'Caveat', 'Architects Daughter', 'xiaolai', 'DFKai-SB', cursive, sans-serif !important;
 }
 
 .hand-drawn-active .node-card {
