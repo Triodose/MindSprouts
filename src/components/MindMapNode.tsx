@@ -594,32 +594,57 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   const customStructure = structure;
 
   // Spacing optimizations when a boundary (dashed border box) is active in this branch
-  if (!isRoot) {
-    const parentChildren = parent?.children || [];
-    const isRangeEnd = parentChildren.some((c) => c.boundary?.endNodeId === node.id);
+  if (!isRoot && parent) {
+    const parentChildren = parent.children || [];
     
-    // 1. If this node starts a boundary
+    // Find if this node is the visual start of any boundary, and whether it has a title
+    let isVisualStart = false;
+    let hasTitleForStart = false;
+    let isVisualEnd = false;
+
+    // Check if this node itself has a boundary
     if (node.boundary) {
-      const hasTitle = !!node.boundary.title;
-      const isRangeStart = !!node.boundary.endNodeId;
-      
+      if (!node.boundary.endNodeId) {
+        // Single-node boundary: starts and ends here
+        isVisualStart = true;
+        hasTitleForStart = !!node.boundary.title;
+        isVisualEnd = true;
+      }
+    }
+
+    // Now look at all sibling boundaries to see if this node falls as a visual start or visual end of a range
+    parentChildren.forEach((child) => {
+      if (child.boundary && child.boundary.endNodeId) {
+        const idxStart = parentChildren.findIndex((x) => x.id === child.id);
+        const idxEnd = parentChildren.findIndex((x) => x.id === child.boundary!.endNodeId);
+        if (idxStart !== -1 && idxEnd !== -1) {
+          const idxMin = Math.min(idxStart, idxEnd);
+          const idxMax = Math.max(idxStart, idxEnd);
+          
+          const thisIdx = parentChildren.findIndex((x) => x.id === node.id);
+          if (thisIdx === idxMin) {
+            isVisualStart = true;
+            if (child.boundary.title) {
+              hasTitleForStart = true;
+            }
+          }
+          if (thisIdx === idxMax) {
+            isVisualEnd = true;
+          }
+        }
+      }
+    });
+
+    if (isVisualStart) {
       if (customStructure === 'org') {
         branchStyle.marginLeft = '16px';
         branchStyle.marginTop = '12px';
-        if (!isRangeStart) {
-          branchStyle.marginRight = '16px';
-          branchStyle.marginBottom = '12px';
-        }
       } else {
-        branchStyle.marginTop = hasTitle ? '28px' : '16px';
-        if (!isRangeStart) {
-          branchStyle.marginBottom = '16px';
-        }
+        branchStyle.marginTop = hasTitleForStart ? '28px' : '16px';
       }
     }
-    
-    // 2. If this node is the end of a range boundary owned by a sibling
-    if (isRangeEnd) {
+
+    if (isVisualEnd) {
       if (customStructure === 'org') {
         branchStyle.marginRight = '16px';
         branchStyle.marginBottom = '12px';
