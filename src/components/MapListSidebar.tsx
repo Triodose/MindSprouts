@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import type { MindMapMetadata } from '../hooks/useMindMap';
 import LogoImage from '../assets/mindsprout_logo_with_text.png';
-import triodoseLogo from '../assets/triodose_logo.png';
+import triodoseIcon from '../assets/triodose_icon.png';
 import { useI18n } from '../context/I18nContext';
 
 interface MapListSidebarProps {
@@ -517,9 +517,9 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
           onClick={() => window.open('https://www.triodose.com', '_blank')}
         >
           <img 
-            src={triodoseLogo} 
+            src={triodoseIcon} 
             alt="Triodose Studio" 
-            style={{ height: '14px', width: 'auto', objectFit: 'contain' }}
+            style={{ height: '16px', width: '16px', objectFit: 'contain' }}
           />
           <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.05em', color: 'var(--theme-text-color)' }}>
             Powered by Triodose
