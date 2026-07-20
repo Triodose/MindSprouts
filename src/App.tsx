@@ -9,7 +9,6 @@ import { ShortcutHelper } from './components/ShortcutHelper';
 import { Outliner } from './components/Outliner';
 import { findNode } from './utils/treeUtils';
 import { navigateLeft, navigateRight, navigateVertical } from './utils/treeNavigation';
-import type { SummaryPosition } from './types/mindmap';
 import { StickyNote } from 'lucide-react';
 import { useI18n } from './context/I18nContext';
 

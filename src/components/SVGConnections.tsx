@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import type { MindMapNode, BoundaryStyle, SummaryPosition } from '../types/mindmap';
+import type { MindMapNode, BoundaryStyle } from '../types/mindmap';
 import { findParent } from '../utils/treeUtils';
 import { useI18n } from '../context/I18nContext';
 
@@ -7,12 +7,6 @@ interface BoundaryDrawData {
   id: string;
   rect: { x: number; y: number; width: number; height: number };
   style: BoundaryStyle;
-}
-
-interface SummaryBrace {
-  id: string;
-  path: string;
-  color: string;
 }
 
 interface SVGConnectionsProps {
