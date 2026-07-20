@@ -23,6 +23,7 @@ export interface BoundaryStyle {
   fillColor?: string;
   borderColor?: string;
   borderStyle?: 'dashed' | 'solid';
+  endNodeId?: string;
 }
 
 export interface MindMapNode {

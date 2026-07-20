@@ -16,7 +16,6 @@ interface InspectorProps {
   onApplyStyleToLevel: (id: string, style: Partial<MindMapNode['style']>) => void;
   onUpdateData: (id: string, data: Partial<MindMapNode>) => void;
   onChangeTheme: (theme: MindMapTheme) => void;
-  onSelectNode?: (id: string | null) => void;
 }
 
 
@@ -82,8 +81,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   onUpdateStyle,
   onApplyStyleToLevel,
   onUpdateData,
-  onChangeTheme,
-  onSelectNode
+  onChangeTheme
 }) => {
   const { t } = useI18n();
   const rootNode = tree.children.find((c) => c.id === 'root');
