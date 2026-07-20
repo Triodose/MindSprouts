@@ -217,7 +217,6 @@ export default function App() {
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
   const [activeNoteNodeId, setActiveNoteNodeId] = useState<string | null>(null);
-  const [summaryPositions, setSummaryPositions] = useState<SummaryPosition[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   // Global UI Application Theme (Light / Dark)
@@ -581,7 +580,6 @@ export default function App() {
                 onUpdateRelText={updateRelationshipLabel}
                 selectedNodeId={selectedId}
                 onSelectNode={handleNodeSelect}
-                onUpdateSummaryPositions={setSummaryPositions}
               />
               
               {/* Render all top-level trees (Main Root + Floating Topics) */}

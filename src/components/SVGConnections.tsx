@@ -25,7 +25,6 @@ interface SVGConnectionsProps {
   onSelectRel?: (id: string | null) => void;
   onUpdateRelText?: (id: string, text: string) => void;
   selectedNodeId?: string | null;
-  onUpdateSummaryPositions?: (positions: SummaryPosition[]) => void;
   onSelectNode?: (id: string | null) => void;
 }
 
@@ -144,15 +143,12 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
   onSelectRel,
   onUpdateRelText,
   selectedNodeId = null,
-  onUpdateSummaryPositions,
   onSelectNode
 }) => {
   const [lines, setLines] = useState<ConnectionLine[]>([]);
   const [relLines, setRelLines] = useState<RelationshipLine[]>([]);
   const [boundaries, setBoundaries] = useState<BoundaryDrawData[]>([]);
-  const [braces, setBraces] = useState<SummaryBrace[]>([]);
   const containerRef = useRef<SVGSVGElement>(null);
-  const previousPositionsRef = useRef<string>('');
 
   useEffect(() => {
     const calculateConnections = () => {
@@ -802,9 +798,6 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
       });
 
       // 2.5. Calculate Summary Braces and Positions
-      const newBraces: SummaryBrace[] = [];
-      const newSummaryPositions: SummaryPosition[] = [];
-
       interface SummaryData {
         parentId: string;
         summary: any;
@@ -840,23 +833,6 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
 
         const startCoords = getUnzoomedCoords(startRect);
         const endCoords = getUnzoomedCoords(endRect);
-
-        const parentEl = treeContainer.querySelector(`[data-node-id="${s.parentId}"]`);
-        const parentCoords = parentEl ? getUnzoomedCoords(parentEl.getBoundingClientRect()) : null;
-
-        // Determine direction
-        let direction: 'left' | 'right' | 'down' = 'right';
-        const structure = s.node.style?.structure || 'logic';
-        
-        if (structure === 'org' || structure === 'timeline') {
-          direction = 'down';
-        } else if (parentCoords) {
-          const startCenter = startCoords.left + startCoords.width / 2;
-          const parentCenter = parentCoords.left + parentCoords.width / 2;
-          if (startCenter < parentCenter) {
-            direction = 'left';
-          }
-        }
 
         const parentNode = findNodeById(tree, s.parentId);
         const allRangedIds: string[] = [];
@@ -925,10 +901,6 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
           style: bStyle
         });
       });
-
-      setBraces([]);
-      previousPositionsRef.current = '[]';
-      onUpdateSummaryPositions?.([]);
 
       // 3. Calculate Relationship Lines
       const newRelLines: RelationshipLine[] = [];
@@ -1231,18 +1203,6 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
           />
         ))}
 
-        {/* Summary Braces */}
-        {braces.map((brace) => (
-          <path
-            key={brace.id}
-            d={brace.path}
-            className="summary-brace-path"
-            stroke={brace.color}
-            strokeWidth={2.5}
-            fill="none"
-            style={{ pointerEvents: 'none', transition: 'stroke 0.2s' }}
-          />
-        ))}
       </svg>
 
       {/* Relationship Label Cards */}
