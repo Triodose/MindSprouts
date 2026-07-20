@@ -731,7 +731,25 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
       const finalizedBoundaries = new Map<string, { x: number; y: number; width: number; height: number }>();
 
       boundariesList.forEach((b) => {
-        const visibleIds = getVisibleDescendants(b.node);
+        let visibleIds: string[] = [];
+        if (b.style.endNodeId) {
+          const parentNode = findParent(tree, b.node.id);
+          if (parentNode && parentNode.children) {
+            const idxStart = parentNode.children.findIndex((c) => c.id === b.node.id);
+            const idxEnd = parentNode.children.findIndex((c) => c.id === b.style.endNodeId);
+            if (idxStart !== -1 && idxEnd !== -1) {
+              const idxMin = Math.min(idxStart, idxEnd);
+              const idxMax = Math.max(idxStart, idxEnd);
+              const rangedSiblings = parentNode.children.slice(idxMin, idxMax + 1);
+              rangedSiblings.forEach((sibling) => {
+                visibleIds.push(...getVisibleDescendants(sibling));
+              });
+            }
+          }
+        }
+        if (visibleIds.length === 0) {
+          visibleIds = getVisibleDescendants(b.node);
+        }
         
         let minX = Infinity;
         let minY = Infinity;
@@ -762,8 +780,25 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
         let ay2 = maxY + basePadding;
 
         // Expand to wrap child boundaries
+        const isDescendantOfAny = (descId: string): boolean => {
+          if (b.style.endNodeId) {
+            const parentNode = findParent(tree, b.node.id);
+            if (parentNode && parentNode.children) {
+              const idxStart = parentNode.children.findIndex((c) => c.id === b.node.id);
+              const idxEnd = parentNode.children.findIndex((c) => c.id === b.style.endNodeId);
+              if (idxStart !== -1 && idxEnd !== -1) {
+                const idxMin = Math.min(idxStart, idxEnd);
+                const idxMax = Math.max(idxStart, idxEnd);
+                const rangedSiblings = parentNode.children.slice(idxMin, idxMax + 1);
+                return rangedSiblings.some((sibling) => sibling.id === descId || isDescendant(sibling, descId));
+              }
+            }
+          }
+          return isDescendant(b.node, descId);
+        };
+
         finalizedBoundaries.forEach((finalRect, descendantId) => {
-          if (isDescendant(b.node, descendantId)) {
+          if (isDescendantOfAny(descendantId)) {
             const spacing = 14;
             ax1 = Math.min(ax1, finalRect.x - spacing);
             ay1 = Math.min(ay1, finalRect.y - spacing);

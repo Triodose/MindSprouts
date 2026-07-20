@@ -593,18 +593,39 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   }
   const customStructure = structure;
 
-  // If node has boundary, add extra margin to prevent boundary overlap with siblings/parents
-  if (node.boundary && !isRoot) {
-    const hasTitle = !!node.boundary.title;
-    if (customStructure === 'org') {
-      branchStyle.marginLeft = '16px';
-      branchStyle.marginRight = '16px';
-      branchStyle.marginTop = '12px';
-      branchStyle.marginBottom = '12px';
-    } else {
-      // Horizontal structures: siblings grow vertically
-      branchStyle.marginTop = hasTitle ? '28px' : '16px';
-      branchStyle.marginBottom = '16px';
+  // Spacing optimizations when a boundary (dashed border box) is active in this branch
+  if (!isRoot) {
+    const parentChildren = parent?.children || [];
+    const isRangeEnd = parentChildren.some((c) => c.boundary?.endNodeId === node.id);
+    
+    // 1. If this node starts a boundary
+    if (node.boundary) {
+      const hasTitle = !!node.boundary.title;
+      const isRangeStart = !!node.boundary.endNodeId;
+      
+      if (customStructure === 'org') {
+        branchStyle.marginLeft = '16px';
+        branchStyle.marginTop = '12px';
+        if (!isRangeStart) {
+          branchStyle.marginRight = '16px';
+          branchStyle.marginBottom = '12px';
+        }
+      } else {
+        branchStyle.marginTop = hasTitle ? '28px' : '16px';
+        if (!isRangeStart) {
+          branchStyle.marginBottom = '16px';
+        }
+      }
+    }
+    
+    // 2. If this node is the end of a range boundary owned by a sibling
+    if (isRangeEnd) {
+      if (customStructure === 'org') {
+        branchStyle.marginRight = '16px';
+        branchStyle.marginBottom = '12px';
+      } else {
+        branchStyle.marginBottom = '16px';
+      }
     }
   }
 

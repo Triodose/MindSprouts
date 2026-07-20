@@ -16,9 +16,6 @@ interface InspectorProps {
   onApplyStyleToLevel: (id: string, style: Partial<MindMapNode['style']>) => void;
   onUpdateData: (id: string, data: Partial<MindMapNode>) => void;
   onChangeTheme: (theme: MindMapTheme) => void;
-  onAddSummary?: (startNodeId: string, endNodeId: string) => void;
-  onUpdateSummaryRange?: (summaryId: string, startNodeId: string, endNodeId: string) => void;
-  onDeleteSummary?: (summaryId: string) => void;
   onSelectNode?: (id: string | null) => void;
 }
 
@@ -86,9 +83,6 @@ export const Inspector: React.FC<InspectorProps> = ({
   onApplyStyleToLevel,
   onUpdateData,
   onChangeTheme,
-  onAddSummary,
-  onUpdateSummaryRange,
-  onDeleteSummary,
   onSelectNode
 }) => {
   const { t } = useI18n();
@@ -1175,184 +1169,51 @@ export const Inspector: React.FC<InspectorProps> = ({
                       })}
                     </div>
                   </div>
+
+                  {/* Sibling Range Selection for Multi-node Boundary */}
+                  {(() => {
+                    const parentNode = findParent(tree, selectedNode.id);
+                    const siblings = parentNode ? parentNode.children : [];
+                    if (siblings.length > 1) {
+                      return (
+                        <div className="inspector-row" style={{ marginTop: '12px' }}>
+                          <span className="inspector-label">{t('boundaryEndNodeLabel') || '包覆至相鄰節點'}</span>
+                          <select
+                            className="inspector-select"
+                            value={selectedNode.boundary?.endNodeId || ''}
+                            onChange={(e) => {
+                              onUpdateData(selectedNode.id, {
+                                boundary: {
+                                  ...selectedNode.boundary!,
+                                  endNodeId: e.target.value || undefined
+                                }
+                              });
+                            }}
+                            style={{
+                              background: 'rgba(255, 255, 255, 0.05)',
+                              border: '1px solid var(--theme-glass-border)',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              color: 'var(--theme-text-color)',
+                              fontSize: '12px',
+                              width: '60%',
+                              outline: 'none'
+                            }}
+                          >
+                            <option value="">{t('boundaryOnlySelf') || '僅自己與子節點'}</option>
+                            {siblings.map((sib) => {
+                              if (sib.id === selectedNode.id) return null;
+                              return <option key={sib.id} value={sib.id}>{sib.text}</option>;
+                            })}
+                          </select>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
               )}
             </div>
-
-            {/* 節點概要 (Summary) Section */}
-            {selectedId && (
-              <>
-                <div className="inspector-divider" style={{ margin: '20px 0 16px', borderTop: '1px dashed var(--theme-glass-border)' }} />
-                
-                <div className="inspector-section" style={{ padding: '0 4px' }}>
-                  {!selectedId.startsWith('summary-') ? (
-                    // For regular sub-nodes (excluding root)
-                    selectedId !== 'root' && (
-                      <div className="inspector-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span className="inspector-title" style={{ margin: 0 }}>{t('summaryTitle')}</span>
-                        <button
-                          className="inspector-button-primary"
-                          onClick={() => onAddSummary?.(selectedId, selectedId)}
-                          style={{
-                            padding: '6px 12px',
-                            borderRadius: '6px',
-                            backgroundColor: 'var(--theme-accent-color)',
-                            color: '#ffffff',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            fontWeight: 600
-                          }}
-                        >
-                          {t('addSummary')}
-                        </button>
-                      </div>
-                    )
-                  ) : (
-                    // For summary nodes themselves
-                    (() => {
-                      const parentNode = findParent(tree, selectedId);
-                      const siblings = parentNode ? parentNode.children : [];
-                      const summaryNode = selectedNode as any;
-                      if (!summaryNode) return null;
-                      
-                      return (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                          <div className="inspector-title" style={{ margin: '0 0 4px' }}>{t('summaryRangeSettings')}</div>
-                          
-                          {/* Start Node */}
-                          <div className="inspector-row">
-                            <span className="inspector-label">{t('startNode')}</span>
-                            <select
-                              className="inspector-select"
-                              value={summaryNode.startNodeId || ''}
-                              onChange={(e) => onUpdateSummaryRange?.(selectedId, e.target.value, summaryNode.endNodeId)}
-                            >
-                              {siblings.map((sib) => (
-                                <option key={sib.id} value={sib.id}>{sib.text}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* End Node */}
-                          <div className="inspector-row">
-                            <span className="inspector-label">{t('endNode')}</span>
-                            <select
-                              className="inspector-select"
-                              value={summaryNode.endNodeId || ''}
-                              onChange={(e) => onUpdateSummaryRange?.(selectedId, summaryNode.startNodeId, e.target.value)}
-                            >
-                              {siblings.map((sib) => (
-                                <option key={sib.id} value={sib.id}>{sib.text}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="inspector-divider" style={{ margin: '8px 0', borderTop: '1px dashed var(--theme-glass-border)' }} />
-
-                          {/* Boundary Title */}
-                          <div className="inspector-row">
-                            <span className="inspector-label">{t('boundaryTitleLabel')}</span>
-                            <input
-                              type="text"
-                              className="inspector-input"
-                              value={summaryNode.text || ''}
-                              onChange={(e) => {
-                                onUpdateData(selectedId, { text: e.target.value });
-                              }}
-                              style={{
-                                background: 'rgba(255, 255, 255, 0.05)',
-                                border: '1px solid var(--theme-glass-border)',
-                                borderRadius: '4px',
-                                padding: '4px 8px',
-                                color: 'var(--theme-text-color)',
-                                fontSize: '12px',
-                                width: '60%',
-                                outline: 'none'
-                              }}
-                            />
-                          </div>
-
-                          {/* Boundary Border Style */}
-                          <div className="inspector-row">
-                            <span className="inspector-label">{t('boundaryBorderStyle')}</span>
-                            <select
-                              className="inspector-select"
-                              value={summaryNode.style?.borderStyle || 'dashed'}
-                              onChange={(e) => {
-                                onUpdateStyle(selectedId, { borderStyle: e.target.value as any });
-                              }}
-                            >
-                              <option value="dashed">{t('borderDashed')}</option>
-                              <option value="solid">{t('borderSolid')}</option>
-                            </select>
-                          </div>
-
-                          {/* Colors */}
-                          <div className="inspector-row-vertical" style={{ marginTop: '4px' }}>
-                            <span className="inspector-label">{t('boundaryColors')}</span>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '6px', marginTop: '6px' }}>
-                              {PRES_BOUNDARY_COLORS.map((item) => {
-                                const isCurrent = summaryNode.style?.borderColor === item.border;
-                                return (
-                                  <button
-                                    key={item.key}
-                                    style={{
-                                      height: '24px',
-                                      borderRadius: '4px',
-                                      background: item.fill,
-                                      border: `1.5px ${isCurrent ? 'solid' : 'dashed'} ${item.border}`,
-                                      cursor: 'pointer',
-                                      fontSize: '9px',
-                                      color: item.border,
-                                      fontWeight: 600,
-                                      opacity: isCurrent ? 1 : 0.6,
-                                      transition: 'all 0.15s'
-                                    }}
-                                    onClick={() => {
-                                      onUpdateStyle(selectedId, {
-                                        borderColor: item.border,
-                                        backgroundColor: item.fill
-                                      });
-                                    }}
-                                  >
-                                    {t(item.key)}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          <div className="inspector-row" style={{ marginTop: '12px' }}>
-                            <button
-                              className="inspector-button-danger"
-                              onClick={() => {
-                                onDeleteSummary?.(selectedId);
-                                onSelectNode?.(null);
-                              }}
-                              style={{
-                                width: '100%',
-                                padding: '8px',
-                                borderRadius: '6px',
-                                backgroundColor: '#ef4444',
-                                color: '#ffffff',
-                                border: 'none',
-                                cursor: 'pointer',
-                                fontSize: '12px',
-                                fontWeight: 600,
-                                textAlign: 'center'
-                              }}
-                            >
-                              {t('deleteBoundary')}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })()
-                  )}
-                </div>
-              </>
-            )}
           </>
         ) : (
           <div style={{ fontSize: '13px', opacity: 0.5, textAlign: 'center', marginTop: '40px' }}>

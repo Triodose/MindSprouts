@@ -718,9 +718,6 @@ export default function App() {
         onApplyStyleToLevel={applyStyleToLevel}
         onUpdateData={updateNodeData}
         onChangeTheme={changeTheme}
-        onAddSummary={addSummary}
-        onUpdateSummaryRange={updateSummaryRange}
-        onDeleteSummary={deleteSummary}
       />
 
       {/* Shortcuts overlay help dialog */}
