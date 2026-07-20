@@ -522,7 +522,7 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
             style={{ height: '16px', width: '16px', objectFit: 'contain' }}
           />
           <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.05em', color: 'var(--theme-text-color)' }}>
-            Powered by Triodose
+            Powered by Triodose Digital
           </span>
         </div>
       </div>
