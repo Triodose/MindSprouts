@@ -593,6 +593,21 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   }
   const customStructure = structure;
 
+  // If node has boundary, add extra margin to prevent boundary overlap with siblings/parents
+  if (node.boundary && !isRoot) {
+    const hasTitle = !!node.boundary.title;
+    if (customStructure === 'org') {
+      branchStyle.marginLeft = '16px';
+      branchStyle.marginRight = '16px';
+      branchStyle.marginTop = '12px';
+      branchStyle.marginBottom = '12px';
+    } else {
+      // Horizontal structures: siblings grow vertically
+      branchStyle.marginTop = hasTitle ? '28px' : '16px';
+      branchStyle.marginBottom = '16px';
+    }
+  }
+
   // Determine direction dynamically: logic-left overrides to left, logic overrides to right, manual dragging (excluding root) follows offset X, otherwise inherits isLeft
   let nodeIsLeft = isLeft;
   if (customStructure === 'logic-left') {
