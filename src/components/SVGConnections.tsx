@@ -122,6 +122,17 @@ const RelationshipLabelCard: React.FC<RelationshipLabelProps> = ({
   );
 };
 
+const findNodeById = (currNode: MindMapNode, id: string): MindMapNode | null => {
+  if (currNode.id === id) return currNode;
+  if (currNode.children) {
+    for (const child of currNode.children) {
+      const res = findNodeById(child, id);
+      if (res) return res;
+    }
+  }
+  return null;
+};
+
 export const SVGConnections: React.FC<SVGConnectionsProps> = ({
   tree,
   themeLineColor,
@@ -845,16 +856,55 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
           }
         }
 
+        const parentNode = findNodeById(tree, s.parentId);
+        const allRangedIds: string[] = [];
+        if (parentNode && parentNode.children) {
+          const idxStart = parentNode.children.findIndex((c) => c.id === s.summary.startNodeId);
+          const idxEnd = parentNode.children.findIndex((c) => c.id === s.summary.endNodeId);
+          if (idxStart !== -1 && idxEnd !== -1) {
+            const idxMin = Math.min(idxStart, idxEnd);
+            const idxMax = Math.max(idxStart, idxEnd);
+            const rangedSiblings = parentNode.children.slice(idxMin, idxMax + 1);
+            rangedSiblings.forEach((sibling) => {
+              allRangedIds.push(...getVisibleDescendants(sibling));
+            });
+          }
+        }
+        if (allRangedIds.length === 0) {
+          allRangedIds.push(s.summary.startNodeId, s.summary.endNodeId);
+        }
+
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+
+        allRangedIds.forEach((nid) => {
+          const cardEl = treeContainer.querySelector(`[data-node-id="${nid}"]`);
+          if (cardEl) {
+            const cardRect = cardEl.getBoundingClientRect();
+            const unzoomed = getUnzoomedCoords(cardRect);
+            minX = Math.min(minX, unzoomed.left);
+            minY = Math.min(minY, unzoomed.top);
+            maxX = Math.max(maxX, unzoomed.right);
+            maxY = Math.max(maxY, unzoomed.bottom);
+          }
+        });
+
+        if (minX === Infinity) {
+          minX = Math.min(startCoords.left, endCoords.left);
+          minY = Math.min(startCoords.top, endCoords.top);
+          maxX = Math.max(startCoords.right, endCoords.right);
+          maxY = Math.max(startCoords.bottom, endCoords.bottom);
+        }
+
         let path = '';
         let cardX = 0;
         let cardY = 0;
         const w = 12;
 
         if (direction === 'right') {
-          const minY = Math.min(startCoords.top, endCoords.top);
-          const maxY = Math.max(startCoords.bottom, endCoords.bottom);
           const center = (minY + maxY) / 2;
-          const maxX = Math.max(startCoords.right, endCoords.right);
           const x = maxX + 8;
           const currentR = Math.min(8, (maxY - minY) / 2);
 
@@ -862,10 +912,7 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
           cardX = x + w + 10;
           cardY = center;
         } else if (direction === 'left') {
-          const minY = Math.min(startCoords.top, endCoords.top);
-          const maxY = Math.max(startCoords.bottom, endCoords.bottom);
           const center = (minY + maxY) / 2;
-          const minX = Math.min(startCoords.left, endCoords.left);
           const x = minX - 8;
           const currentR = Math.min(8, (maxY - minY) / 2);
 
@@ -874,10 +921,7 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
           cardY = center;
         } else {
           // down
-          const minX = Math.min(startCoords.left, endCoords.left);
-          const maxX = Math.max(startCoords.right, endCoords.right);
           const center = (minX + maxX) / 2;
-          const maxY = Math.max(startCoords.bottom, endCoords.bottom);
           const y = maxY + 8;
           const currentR = Math.min(8, (maxX - minX) / 2);
 
