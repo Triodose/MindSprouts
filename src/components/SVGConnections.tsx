@@ -26,6 +26,7 @@ interface SVGConnectionsProps {
   onUpdateRelText?: (id: string, text: string) => void;
   selectedNodeId?: string | null;
   onUpdateSummaryPositions?: (positions: SummaryPosition[]) => void;
+  onSelectNode?: (id: string | null) => void;
 }
 
 interface ConnectionLine {
@@ -143,7 +144,8 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
   onSelectRel,
   onUpdateRelText,
   selectedNodeId = null,
-  onUpdateSummaryPositions
+  onUpdateSummaryPositions,
+  onSelectNode
 }) => {
   const [lines, setLines] = useState<ConnectionLine[]>([]);
   const [relLines, setRelLines] = useState<RelationshipLine[]>([]);
@@ -898,67 +900,35 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
           maxY = Math.max(startCoords.bottom, endCoords.bottom);
         }
 
-        let path = '';
-        let cardX = 0;
-        let cardY = 0;
-        const w = 12;
+        // Draw range-based boundary instead of brace
+        const basePadding = 12;
+        const hasTitle = !!s.summary.text;
+        const topPadding = hasTitle ? basePadding + 20 : basePadding;
+        
+        const rect = {
+          x: minX - basePadding,
+          y: minY - topPadding,
+          width: (maxX - minX) + basePadding * 2,
+          height: (maxY - minY) + topPadding + basePadding
+        };
 
-        if (direction === 'right') {
-          const center = (minY + maxY) / 2;
-          const x = maxX + 8;
-          const currentR = Math.min(8, (maxY - minY) / 2);
+        const bStyle = {
+          title: s.summary.text || '',
+          fillColor: s.summary.style?.backgroundColor || 'rgba(99, 102, 241, 0.05)',
+          borderColor: s.summary.style?.borderColor || '#6366f1',
+          borderStyle: s.summary.style?.borderStyle || 'dashed'
+        };
 
-          path = `M ${x} ${minY} Q ${x + currentR} ${minY}, ${x + currentR} ${minY + currentR} L ${x + currentR} ${center - currentR} Q ${x + currentR} ${center}, ${x + w} ${center} Q ${x + currentR} ${center}, ${x + currentR} ${center + currentR} L ${x + currentR} ${maxY - currentR} Q ${x + currentR} ${maxY}, ${x} ${maxY}`;
-          cardX = x + w + 10;
-          cardY = center;
-        } else if (direction === 'left') {
-          const center = (minY + maxY) / 2;
-          const x = minX - 8;
-          const currentR = Math.min(8, (maxY - minY) / 2);
-
-          path = `M ${x} ${minY} Q ${x - currentR} ${minY}, ${x - currentR} ${minY + currentR} L ${x - currentR} ${center - currentR} Q ${x - currentR} ${center}, ${x - w} ${center} Q ${x - currentR} ${center}, ${x - currentR} ${center + currentR} L ${x - currentR} ${maxY - currentR} Q ${x - currentR} ${maxY}, ${x} ${maxY}`;
-          cardX = x - w - 10;
-          cardY = center;
-        } else {
-          // down
-          const center = (minX + maxX) / 2;
-          const y = maxY + 8;
-          const currentR = Math.min(8, (maxX - minX) / 2);
-
-          path = `M ${minX} ${y} Q ${minX} ${y + currentR}, ${minX + currentR} ${y + currentR} L ${center - currentR} ${y + currentR} Q ${center} ${y + currentR}, ${center} ${y + w} Q ${center} ${y + currentR}, ${center + currentR} ${y + currentR} L ${maxX - currentR} ${y + currentR} Q ${maxX} ${y + currentR}, ${maxX} ${y}`;
-          cardX = center;
-          cardY = y + w + 10;
-        }
-
-        newBraces.push({
+        newBoundaries.push({
           id: s.summary.id,
-          path,
-          color: themeLineColor
-        });
-
-        newSummaryPositions.push({
-          id: s.summary.id,
-          x: cardX,
-          y: cardY,
-          direction,
-          node: s.summary as unknown as MindMapNode
+          rect,
+          style: bStyle
         });
       });
 
-      setBraces(newBraces);
-
-      // Trigger callback if changed to prevent render loops
-      const currentPositionsSerialized = JSON.stringify(newSummaryPositions.map(p => ({
-        id: p.id,
-        x: Math.round(p.x),
-        y: Math.round(p.y),
-        direction: p.direction,
-        text: p.node.text
-      })));
-      if (currentPositionsSerialized !== previousPositionsRef.current) {
-        previousPositionsRef.current = currentPositionsSerialized;
-        onUpdateSummaryPositions?.(newSummaryPositions);
-      }
+      setBraces([]);
+      previousPositionsRef.current = '[]';
+      onUpdateSummaryPositions?.([]);
 
       // 3. Calculate Relationship Lines
       const newRelLines: RelationshipLine[] = [];
@@ -1180,40 +1150,55 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
         </defs>
 
         {/* 0. Subtree boundaries (rendered behind connection lines) */}
-        {boundaries.map((b) => (
-          <g key={b.id}>
-            <rect
-              x={b.rect.x}
-              y={b.rect.y}
-              width={b.rect.width}
-              height={b.rect.height}
-              rx={8}
-              ry={8}
-              fill={b.style.fillColor || 'rgba(99, 102, 241, 0.05)'}
-              stroke={b.style.borderColor || 'rgba(99, 102, 241, 0.4)'}
-              strokeWidth={1.5}
-              strokeDasharray={b.style.borderStyle === 'dashed' ? '5,4' : undefined}
-              style={{ pointerEvents: 'none', transition: 'all 0.2s ease-out' }}
-            />
-            {b.style.title && (
-              <text
-                x={b.rect.x + 8}
-                y={b.rect.y + 18}
-                className="boundary-title-text"
-                fill={b.style.borderColor || 'var(--theme-accent-color)'}
-                style={{
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  pointerEvents: 'none',
-                  userSelect: 'none',
-                  fill: b.style.borderColor || 'var(--theme-accent-color)'
+        {boundaries.map((b) => {
+          const isSelected = selectedNodeId === b.id;
+          const strokeColor = isSelected ? 'var(--theme-accent-color)' : (b.style.borderColor || 'rgba(99, 102, 241, 0.4)');
+          const strokeWidth = isSelected ? 2.5 : 1.5;
+
+          return (
+            <g key={b.id}>
+              <rect
+                x={b.rect.x}
+                y={b.rect.y}
+                width={b.rect.width}
+                height={b.rect.height}
+                rx={8}
+                ry={8}
+                fill={b.style.fillColor || 'rgba(99, 102, 241, 0.05)'}
+                stroke={strokeColor}
+                strokeWidth={strokeWidth}
+                strokeDasharray={b.style.borderStyle === 'dashed' ? '5,4' : undefined}
+                style={{ pointerEvents: 'stroke', cursor: 'pointer', transition: 'all 0.2s ease-out' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectNode?.(b.id);
                 }}
-              >
-                {b.style.title}
-              </text>
-            )}
-          </g>
-        ))}
+              />
+              {b.style.title && (
+                <text
+                  x={b.rect.x + 8}
+                  y={b.rect.y + 18}
+                  className="boundary-title-text"
+                  fill={strokeColor}
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    pointerEvents: 'auto',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    fill: strokeColor
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectNode?.(b.id);
+                  }}
+                >
+                  {b.style.title}
+                </text>
+              )}
+            </g>
+          );
+        })}
 
         {/* Tree Hierarchical Lines */}
         {lines.map((line) => (

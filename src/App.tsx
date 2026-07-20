@@ -580,55 +580,9 @@ export default function App() {
                 onSelectRel={setSelectedRelId}
                 onUpdateRelText={updateRelationshipLabel}
                 selectedNodeId={selectedId}
+                onSelectNode={handleNodeSelect}
                 onUpdateSummaryPositions={setSummaryPositions}
               />
-              
-              {/* Render all Summary Sub-trees */}
-              {summaryPositions.map((pos) => {
-                let translateStr = 'translate(0%, -50%)';
-                if (pos.direction === 'left') translateStr = 'translate(-100%, -50%)';
-                else if (pos.direction === 'down') translateStr = 'translate(-50%, 0%)';
-
-                return (
-                  <div
-                    key={pos.id}
-                    className="summary-tree-wrapper"
-                    style={{
-                      position: 'absolute',
-                      left: `${pos.x}px`,
-                      top: `${pos.y}px`,
-                      transform: translateStr,
-                      zIndex: 8,
-                      pointerEvents: 'auto'
-                    }}
-                  >
-                    <MindMapNode
-                      node={pos.node}
-                      parent={tree}
-                      selectedId={selectedId}
-                      editingId={editingId}
-                      zoom={transform.zoom}
-                      isAutoLayout={isAutoLayout}
-                      isTopLevel={false}
-                      isLeft={pos.direction === 'left'}
-                      onSelect={handleNodeSelect}
-                      onStartEdit={setEditingId}
-                      onEndEdit={() => setEditingId(null)}
-                      onUpdateText={updateNodeText}
-                      onToggleCollapse={toggleCollapse}
-                      onUpdateOffset={updateNodeOffsetSilent}
-                      onEndDrag={commitTreeState}
-                      onReparent={reparentNode}
-                      onReorder={reorderNode}
-                      onUpdateData={updateNodeData}
-                      onOpenNoteEditor={handleOpenNoteEditor}
-                      isRoot={false}
-                      depth={0}
-                      theme={theme}
-                    />
-                  </div>
-                );
-              })}
               
               {/* Render all top-level trees (Main Root + Floating Topics) */}
               {tree.children.map((child) => (

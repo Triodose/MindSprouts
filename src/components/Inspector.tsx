@@ -19,6 +19,7 @@ interface InspectorProps {
   onAddSummary?: (startNodeId: string, endNodeId: string) => void;
   onUpdateSummaryRange?: (summaryId: string, startNodeId: string, endNodeId: string) => void;
   onDeleteSummary?: (summaryId: string) => void;
+  onSelectNode?: (id: string | null) => void;
 }
 
 
@@ -87,7 +88,8 @@ export const Inspector: React.FC<InspectorProps> = ({
   onChangeTheme,
   onAddSummary,
   onUpdateSummaryRange,
-  onDeleteSummary
+  onDeleteSummary,
+  onSelectNode
 }) => {
   const { t } = useI18n();
   const rootNode = tree.children.find((c) => c.id === 'root');
@@ -1212,11 +1214,13 @@ export const Inspector: React.FC<InspectorProps> = ({
                       const parentNode = findParent(tree, selectedId);
                       const siblings = parentNode ? parentNode.children : [];
                       const summaryNode = selectedNode as any;
+                      if (!summaryNode) return null;
                       
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                          <div className="inspector-title" style={{ margin: 0 }}>{t('summaryRangeSettings')}</div>
+                          <div className="inspector-title" style={{ margin: '0 0 4px' }}>{t('summaryRangeSettings')}</div>
                           
+                          {/* Start Node */}
                           <div className="inspector-row">
                             <span className="inspector-label">{t('startNode')}</span>
                             <select
@@ -1230,6 +1234,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                             </select>
                           </div>
 
+                          {/* End Node */}
                           <div className="inspector-row">
                             <span className="inspector-label">{t('endNode')}</span>
                             <select
@@ -1243,10 +1248,88 @@ export const Inspector: React.FC<InspectorProps> = ({
                             </select>
                           </div>
 
-                          <div className="inspector-row" style={{ marginTop: '4px' }}>
+                          <div className="inspector-divider" style={{ margin: '8px 0', borderTop: '1px dashed var(--theme-glass-border)' }} />
+
+                          {/* Boundary Title */}
+                          <div className="inspector-row">
+                            <span className="inspector-label">{t('boundaryTitleLabel')}</span>
+                            <input
+                              type="text"
+                              className="inspector-input"
+                              value={summaryNode.text || ''}
+                              onChange={(e) => {
+                                onUpdateData(selectedId, { text: e.target.value });
+                              }}
+                              style={{
+                                background: 'rgba(255, 255, 255, 0.05)',
+                                border: '1px solid var(--theme-glass-border)',
+                                borderRadius: '4px',
+                                padding: '4px 8px',
+                                color: 'var(--theme-text-color)',
+                                fontSize: '12px',
+                                width: '60%',
+                                outline: 'none'
+                              }}
+                            />
+                          </div>
+
+                          {/* Boundary Border Style */}
+                          <div className="inspector-row">
+                            <span className="inspector-label">{t('boundaryBorderStyle')}</span>
+                            <select
+                              className="inspector-select"
+                              value={summaryNode.style?.borderStyle || 'dashed'}
+                              onChange={(e) => {
+                                onUpdateStyle(selectedId, { borderStyle: e.target.value as any });
+                              }}
+                            >
+                              <option value="dashed">{t('borderDashed')}</option>
+                              <option value="solid">{t('borderSolid')}</option>
+                            </select>
+                          </div>
+
+                          {/* Colors */}
+                          <div className="inspector-row-vertical" style={{ marginTop: '4px' }}>
+                            <span className="inspector-label">{t('boundaryColors')}</span>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '6px', marginTop: '6px' }}>
+                              {PRES_BOUNDARY_COLORS.map((item) => {
+                                const isCurrent = summaryNode.style?.borderColor === item.border;
+                                return (
+                                  <button
+                                    key={item.key}
+                                    style={{
+                                      height: '24px',
+                                      borderRadius: '4px',
+                                      background: item.fill,
+                                      border: `1.5px ${isCurrent ? 'solid' : 'dashed'} ${item.border}`,
+                                      cursor: 'pointer',
+                                      fontSize: '9px',
+                                      color: item.border,
+                                      fontWeight: 600,
+                                      opacity: isCurrent ? 1 : 0.6,
+                                      transition: 'all 0.15s'
+                                    }}
+                                    onClick={() => {
+                                      onUpdateStyle(selectedId, {
+                                        borderColor: item.border,
+                                        backgroundColor: item.fill
+                                      });
+                                    }}
+                                  >
+                                    {t(item.key)}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          <div className="inspector-row" style={{ marginTop: '12px' }}>
                             <button
                               className="inspector-button-danger"
-                              onClick={() => onDeleteSummary?.(selectedId)}
+                              onClick={() => {
+                                onDeleteSummary?.(selectedId);
+                                onSelectNode?.(null);
+                              }}
                               style={{
                                 width: '100%',
                                 padding: '8px',
@@ -1260,7 +1343,7 @@ export const Inspector: React.FC<InspectorProps> = ({
                                 textAlign: 'center'
                               }}
                             >
-                              {t('deleteSummary')}
+                              {t('deleteBoundary')}
                             </button>
                           </div>
                         </div>
