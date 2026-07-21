@@ -207,6 +207,13 @@ export default function App() {
     reorderMapsList,
     syncStatus,
     saveMapData,
+    folders,
+    mapFolderMap,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    toggleFolderCollapse,
+    moveMapToFolder,
     isGoogleDriveConfigured
   } = useMindMap();
 
@@ -667,6 +674,13 @@ export default function App() {
         onDeleteMap={deleteMap}
         onRenameMap={renameMap}
         onReorderMaps={reorderMapsList}
+        folders={folders}
+        mapFolderMap={mapFolderMap}
+        onCreateFolder={createFolder}
+        onRenameFolder={renameFolder}
+        onDeleteFolder={deleteFolder}
+        onToggleFolderCollapse={toggleFolderCollapse}
+        onMoveMapToFolder={moveMapToFolder}
         isGoogleDriveConfigured={isGoogleDriveConfigured}
         user={user}
         syncStatus={syncStatus}

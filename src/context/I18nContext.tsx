@@ -109,6 +109,10 @@ const translations = {
 
     // General
     untitledMap: '未命名心智圖',
+    newFolder: '新增資料夾',
+    untitledFolder: '未命名資料夾',
+    deleteFolderConfirm: '確定要刪除此資料夾嗎？資料夾內的心智圖將自動移至預設資料夾。',
+    moveToFolder: '移動至資料夾',
     initRoot: 'MindSprouts 心智圖',
     initChild1: '雙擊以修改內容',
     initChild1_1: '按 Tab 新增子節點',
@@ -338,6 +342,10 @@ const translations = {
 
     // General
     untitledMap: 'Untitled Mind Map',
+    newFolder: 'New Folder',
+    untitledFolder: 'Untitled Folder',
+    deleteFolderConfirm: 'Are you sure you want to delete this folder? Mind maps inside will be moved to the default folder.',
+    moveToFolder: 'Move to Folder',
     initRoot: 'MindSprouts Mind Map',
     initChild1: 'Double-click to Edit',
     initChild1_1: 'Press Tab to add a child',

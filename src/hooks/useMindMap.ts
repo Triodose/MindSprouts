@@ -11,6 +11,12 @@ declare const google: any;
 const LOCAL_STORAGE_MAPS_KEY = 'mindsprout_local_maps';
 const LOCAL_STORAGE_ACTIVE_ID_KEY = 'mindsprout_active_map_id';
 
+export interface FolderItem {
+  id: string;
+  name: string;
+  isCollapsed?: boolean;
+}
+
 export interface MindMapMetadata {
   id: string;
   title: string;
@@ -44,6 +50,85 @@ export const useMindMap = () => {
   // MindMaps List Metadata
   const [mapsList, setMapsList] = useState<MindMapMetadata[]>([]);
   const [activeMapId, setActiveMapId] = useState<string>('default-map');
+  const [folders, setFolders] = useState<FolderItem[]>([]);
+  const [mapFolderMap, setMapFolderMap] = useState<Record<string, string>>({});
+
+  // Load Folder Settings on startup
+  useEffect(() => {
+    const loadFolderSettings = async () => {
+      const savedFoldersStr = await storage.getSetting('mindsprout_folders', '');
+      let parsedFolders: FolderItem[] = [];
+      if (savedFoldersStr) {
+        try {
+          parsedFolders = JSON.parse(savedFoldersStr);
+        } catch (e) {
+          console.error('Failed to parse folders setting:', e);
+        }
+      }
+      if (!parsedFolders || parsedFolders.length === 0) {
+        parsedFolders = [{ id: 'default', name: t('myMindMaps'), isCollapsed: false }];
+      }
+      setFolders(parsedFolders);
+
+      const savedMapFoldersStr = await storage.getSetting('mindsprout_map_folders', '{}');
+      let parsedMapFolders: Record<string, string> = {};
+      if (savedMapFoldersStr) {
+        try {
+          parsedMapFolders = JSON.parse(savedMapFoldersStr);
+        } catch (e) {
+          console.error('Failed to parse map_folders setting:', e);
+        }
+      }
+      setMapFolderMap(parsedMapFolders);
+    };
+
+    loadFolderSettings();
+  }, [t]);
+
+  const createFolder = useCallback(async (name?: string) => {
+    const finalName = name || t('untitledFolder');
+    const newId = 'folder-' + Math.random().toString(36).substring(2, 9);
+    const newFolder: FolderItem = { id: newId, name: finalName, isCollapsed: false };
+    const updated = [...folders, newFolder];
+    setFolders(updated);
+    await storage.setSetting('mindsprout_folders', JSON.stringify(updated));
+    return newId;
+  }, [folders, t]);
+
+  const renameFolder = useCallback(async (folderId: string, newName: string) => {
+    if (!newName.trim()) return;
+    const updated = folders.map(f => f.id === folderId ? { ...f, name: newName.trim() } : f);
+    setFolders(updated);
+    await storage.setSetting('mindsprout_folders', JSON.stringify(updated));
+  }, [folders]);
+
+  const deleteFolder = useCallback(async (folderId: string) => {
+    if (folderId === 'default') return;
+    const updatedFolders = folders.filter(f => f.id !== folderId);
+    setFolders(updatedFolders);
+    await storage.setSetting('mindsprout_folders', JSON.stringify(updatedFolders));
+
+    const updatedMapFolder = { ...mapFolderMap };
+    Object.keys(updatedMapFolder).forEach(mapId => {
+      if (updatedMapFolder[mapId] === folderId) {
+        delete updatedMapFolder[mapId];
+      }
+    });
+    setMapFolderMap(updatedMapFolder);
+    await storage.setSetting('mindsprout_map_folders', JSON.stringify(updatedMapFolder));
+  }, [folders, mapFolderMap]);
+
+  const toggleFolderCollapse = useCallback(async (folderId: string) => {
+    const updated = folders.map(f => f.id === folderId ? { ...f, isCollapsed: !f.isCollapsed } : f);
+    setFolders(updated);
+    await storage.setSetting('mindsprout_folders', JSON.stringify(updated));
+  }, [folders]);
+
+  const moveMapToFolder = useCallback(async (mapId: string, targetFolderId: string) => {
+    const updated = { ...mapFolderMap, [mapId]: targetFolderId };
+    setMapFolderMap(updated);
+    await storage.setSetting('mindsprout_map_folders', JSON.stringify(updated));
+  }, [mapFolderMap]);
 
   // Current Active Tree State
   const [tree, setTree] = useState<MindMapNode>(() => 
@@ -622,7 +707,7 @@ export const useMindMap = () => {
   }, [tree, saveMapData, syncStatus]);
 
   // --- Create Map ---
-  const createNewMap = useCallback(async (title?: string) => {
+  const createNewMap = useCallback(async (title?: string, folderId?: string) => {
     const finalTitle = title || t('untitledMap');
     const initialTree = {
       id: 'root',
@@ -633,6 +718,11 @@ export const useMindMap = () => {
     const newId = Math.random().toString(36).substring(2, 9);
 
     await storage.saveMap(newId, finalTitle, initialTree, timeString);
+    if (folderId && folderId !== 'default') {
+      const updatedMapFolders = { ...mapFolderMap, [newId]: folderId };
+      setMapFolderMap(updatedMapFolders);
+      await storage.setSetting('mindsprout_map_folders', JSON.stringify(updatedMapFolders));
+    }
     setMapsList((prev) => [{ id: newId, title: finalTitle, updated_at: timeString }, ...prev]);
     switchMap(newId);
 
@@ -641,10 +731,10 @@ export const useMindMap = () => {
       setIsSyncing(true);
       try {
         const token = await getValidToken();
-        const folderId = localStorage.getItem('google_folder_id') || googleFolderId;
-        if (!folderId) throw new Error('Google Folder ID not set');
+        const gFolderId = localStorage.getItem('google_folder_id') || googleFolderId;
+        if (!gFolderId) throw new Error('Google Folder ID not set');
 
-        const fileId = await googleDriveClient.createSproutFile(token, folderId, finalTitle, {
+        const fileId = await googleDriveClient.createSproutFile(token, gFolderId, finalTitle, {
           id: newId,
           title: finalTitle,
           content: initialTree
@@ -652,6 +742,15 @@ export const useMindMap = () => {
 
         await storage.deleteMap(newId);
         await storage.saveMap(fileId, finalTitle, initialTree, timeString);
+
+        if (folderId && folderId !== 'default') {
+          const updatedMapFolders = { ...mapFolderMap };
+          delete updatedMapFolders[newId];
+          updatedMapFolders[fileId] = folderId;
+          setMapFolderMap(updatedMapFolders);
+          await storage.setSetting('mindsprout_map_folders', JSON.stringify(updatedMapFolders));
+        }
+
         setMapsList((prev) => prev.map(m => m.id === newId ? { ...m, id: fileId } : m));
         switchMap(fileId);
       } catch (err) {
@@ -660,7 +759,7 @@ export const useMindMap = () => {
         setIsSyncing(false);
       }
     }
-  }, [user, switchMap, getLocalMaps, getValidToken, googleFolderId, t]);
+  }, [user, switchMap, getLocalMaps, getValidToken, googleFolderId, mapFolderMap, t]);
 
   // --- Delete Map ---
   const deleteMap = useCallback(async (id: string) => {
@@ -1321,6 +1420,13 @@ export const useMindMap = () => {
     saveMapData,
     syncStatus,
     isMapsListLoaded,
+    folders,
+    mapFolderMap,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    toggleFolderCollapse,
+    moveMapToFolder,
     isGoogleDriveConfigured: !!import.meta.env.VITE_GOOGLE_CLIENT_ID,
     isSupabaseConfigured: !!import.meta.env.VITE_GOOGLE_CLIENT_ID
   };
