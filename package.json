@@ -2,27 +2,38 @@
   "name": "mindsprout",
   "private": true,
   "version": "0.0.0",
-  "type": "module",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "electron:build-main": "esbuild electron/main.ts electron/preload.ts --platform=node --outdir=dist-electron --bundle --external:electron --external:better-sqlite3",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && npm run electron:build-main && electron dist-electron/main.js\"",
+    "electron:dist": "npm run build && npm run electron:build-main && electron-builder"
   },
   "dependencies": {
+    "better-sqlite3": "^12.11.1",
     "html2canvas": "^1.4.1",
     "lucide-react": "^1.23.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/google.accounts": "^0.0.14",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "concurrently": "^10.0.3",
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.1",
     "oxlint": "^1.71.0",
     "typescript": "~6.0.2",
-    "vite": "^8.1.1"
+    "vite": "^8.1.1",
+    "wait-on": "^9.0.10"
   }
 }
