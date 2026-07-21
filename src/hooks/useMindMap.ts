@@ -39,6 +39,8 @@ const migrateTree = (loadedTree: MindMapNode): MindMapNode => {
   };
 };
 
+const isElectron = typeof window !== 'undefined' && typeof window.electronAPI !== 'undefined';
+
 export const useMindMap = () => {
   const { t } = useI18n();
   // MindMaps List Metadata
@@ -246,7 +248,7 @@ export const useMindMap = () => {
       });
       
       // Silent refresh / restore connection on reload
-      const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+      const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
       const cachedToken = localStorage.getItem('google_access_token');
       const cachedExpiry = localStorage.getItem('google_token_expiry');
       
@@ -266,7 +268,7 @@ export const useMindMap = () => {
   }, [handleSuccessfulLogin]);
 
   const getValidToken = useCallback(async (): Promise<string> => {
-    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+    const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
     if (!isConnected) throw new Error('Google Drive is not connected');
 
     const token = googleAccessToken || localStorage.getItem('google_access_token');
@@ -350,7 +352,7 @@ export const useMindMap = () => {
 
   // --- Load / Fetch Maps List ---
   const fetchMapsList = useCallback(async () => {
-    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+    const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
     if (isConnected) {
       if (!googleAccessToken) {
         // Connected but waiting for Google access token (e.g. initial load / silent refresh)
@@ -499,7 +501,7 @@ export const useMindMap = () => {
   // --- Load Selected Map Content ---
   useEffect(() => {
     const loadActiveMapContent = async () => {
-      const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+      const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
       if (isConnected) {
         if (!isMapsListLoaded) return;
 
@@ -605,7 +607,7 @@ export const useMindMap = () => {
   // --- Sync / Auto Save Content ---
   const saveMapData = useCallback((currentTree: MindMapNode, forceImmediate = false) => {
     const timeString = new Date().toISOString();
-    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+    const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
     const targetFileId = activeMapId;
 
     // 1. Always update storage immediately for fast offline saving
@@ -708,7 +710,7 @@ export const useMindMap = () => {
       children: []
     };
     const timeString = new Date().toISOString();
-    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+    const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
 
     if (isConnected) {
       setIsSyncing(true);
@@ -761,7 +763,7 @@ export const useMindMap = () => {
       switchMap(remaining[0].id);
     }
 
-    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+    const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
 
     if (isConnected) {
       setIsSyncing(true);
@@ -805,7 +807,7 @@ export const useMindMap = () => {
   const renameMap = useCallback(async (id: string, newTitle: string) => {
     if (newTitle.trim() === '') return;
     const timeString = new Date().toISOString();
-    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+    const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
 
     if (isConnected) {
       setIsSyncing(true);
@@ -1064,7 +1066,7 @@ export const useMindMap = () => {
     const migrated = migrateTree(sanitized);
     const title = migrated.text || t('importedMap');
     const timeString = new Date().toISOString();
-    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+    const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
 
     if (isConnected) {
       setIsSyncing(true);
