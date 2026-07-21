@@ -9,7 +9,9 @@ let dbPath: string = '';
 
 // Initialize Database
 async function initDatabase() {
-  const SQL = await initSqlJs();
+  const SQL = await initSqlJs({
+    locateFile: (file: string) => path.join(app.getAppPath(), 'node_modules/sql.js/dist', file)
+  });
   const userDataPath = app.getPath('userData');
   if (!fs.existsSync(userDataPath)) {
     fs.mkdirSync(userDataPath, { recursive: true });
