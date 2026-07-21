@@ -8,10 +8,11 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview",
+    "preview": "npm run build && wrangler dev",
     "electron:build-main": "esbuild electron/main.ts electron/preload.ts --platform=node --outdir=dist-electron --bundle --external:electron --external:sql.js --out-extension:.js=.cjs",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && npm run electron:build-main && electron dist-electron/main.cjs\"",
-    "electron:dist": "npm run build && npm run electron:build-main && electron-builder"
+    "electron:dist": "npm run build && npm run electron:build-main && electron-builder",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "html2canvas": "^1.4.1",
@@ -21,6 +22,7 @@
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.45.1",
     "@types/google.accounts": "^0.0.14",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
@@ -34,6 +36,7 @@
     "oxlint": "^1.71.0",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
-    "wait-on": "^9.0.10"
+    "wait-on": "^9.0.10",
+    "wrangler": "^4.112.0"
   }
 }
