@@ -85,50 +85,7 @@ export const useMindMap = () => {
     loadFolderSettings();
   }, [t]);
 
-  const createFolder = useCallback(async (name?: string) => {
-    const finalName = name || t('untitledFolder');
-    const newId = 'folder-' + Math.random().toString(36).substring(2, 9);
-    const newFolder: FolderItem = { id: newId, name: finalName, isCollapsed: false };
-    const updated = [...folders, newFolder];
-    setFolders(updated);
-    await storage.setSetting('mindsprout_folders', JSON.stringify(updated));
-    return newId;
-  }, [folders, t]);
 
-  const renameFolder = useCallback(async (folderId: string, newName: string) => {
-    if (!newName.trim()) return;
-    const updated = folders.map(f => f.id === folderId ? { ...f, name: newName.trim() } : f);
-    setFolders(updated);
-    await storage.setSetting('mindsprout_folders', JSON.stringify(updated));
-  }, [folders]);
-
-  const deleteFolder = useCallback(async (folderId: string) => {
-    if (folderId === 'default') return;
-    const updatedFolders = folders.filter(f => f.id !== folderId);
-    setFolders(updatedFolders);
-    await storage.setSetting('mindsprout_folders', JSON.stringify(updatedFolders));
-
-    const updatedMapFolder = { ...mapFolderMap };
-    Object.keys(updatedMapFolder).forEach(mapId => {
-      if (updatedMapFolder[mapId] === folderId) {
-        delete updatedMapFolder[mapId];
-      }
-    });
-    setMapFolderMap(updatedMapFolder);
-    await storage.setSetting('mindsprout_map_folders', JSON.stringify(updatedMapFolder));
-  }, [folders, mapFolderMap]);
-
-  const toggleFolderCollapse = useCallback(async (folderId: string) => {
-    const updated = folders.map(f => f.id === folderId ? { ...f, isCollapsed: !f.isCollapsed } : f);
-    setFolders(updated);
-    await storage.setSetting('mindsprout_folders', JSON.stringify(updated));
-  }, [folders]);
-
-  const moveMapToFolder = useCallback(async (mapId: string, targetFolderId: string) => {
-    const updated = { ...mapFolderMap, [mapId]: targetFolderId };
-    setMapFolderMap(updated);
-    await storage.setSetting('mindsprout_map_folders', JSON.stringify(updated));
-  }, [mapFolderMap]);
 
   // Current Active Tree State
   const [tree, setTree] = useState<MindMapNode>(() => 
@@ -402,6 +359,72 @@ export const useMindMap = () => {
     });
   }, [handleSuccessfulLogin, googleAccessToken, googleTokenExpiry]);
 
+  const syncFoldersToDriveConfig = useCallback(async (latestFolders: FolderItem[], latestMapFolderMap: Record<string, string>) => {
+    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
+    if (!isConnected) return;
+    try {
+      const token = await getValidToken();
+      const folderId = localStorage.getItem('google_folder_id') || googleFolderId;
+      if (token && folderId) {
+        await googleDriveClient.saveConfigFile(token, folderId, {
+          folders: latestFolders,
+          mapFolderMap: latestMapFolderMap
+        });
+      }
+    } catch (err) {
+      console.error('Failed to sync folder config to Drive:', err);
+    }
+  }, [getValidToken, googleFolderId]);
+
+  const createFolder = useCallback(async (name?: string) => {
+    const finalName = name || t('untitledFolder');
+    const newId = 'folder-' + Math.random().toString(36).substring(2, 9);
+    const newFolder: FolderItem = { id: newId, name: finalName, isCollapsed: false };
+    const updated = [...folders, newFolder];
+    setFolders(updated);
+    await storage.setSetting('mindsprout_folders', JSON.stringify(updated));
+    syncFoldersToDriveConfig(updated, mapFolderMap);
+    return newId;
+  }, [folders, mapFolderMap, syncFoldersToDriveConfig, t]);
+
+  const renameFolder = useCallback(async (folderId: string, newName: string) => {
+    if (!newName.trim()) return;
+    const updated = folders.map(f => f.id === folderId ? { ...f, name: newName.trim() } : f);
+    setFolders(updated);
+    await storage.setSetting('mindsprout_folders', JSON.stringify(updated));
+    syncFoldersToDriveConfig(updated, mapFolderMap);
+  }, [folders, mapFolderMap, syncFoldersToDriveConfig]);
+
+  const deleteFolder = useCallback(async (folderId: string) => {
+    if (folderId === 'default') return;
+    const updatedFolders = folders.filter(f => f.id !== folderId);
+    setFolders(updatedFolders);
+    await storage.setSetting('mindsprout_folders', JSON.stringify(updatedFolders));
+
+    const updatedMapFolder = { ...mapFolderMap };
+    Object.keys(updatedMapFolder).forEach(mapId => {
+      if (updatedMapFolder[mapId] === folderId) {
+        delete updatedMapFolder[mapId];
+      }
+    });
+    setMapFolderMap(updatedMapFolder);
+    await storage.setSetting('mindsprout_map_folders', JSON.stringify(updatedMapFolder));
+    syncFoldersToDriveConfig(updatedFolders, updatedMapFolder);
+  }, [folders, mapFolderMap, syncFoldersToDriveConfig]);
+
+  const toggleFolderCollapse = useCallback(async (folderId: string) => {
+    const updated = folders.map(f => f.id === folderId ? { ...f, isCollapsed: !f.isCollapsed } : f);
+    setFolders(updated);
+    await storage.setSetting('mindsprout_folders', JSON.stringify(updated));
+  }, [folders]);
+
+  const moveMapToFolder = useCallback(async (mapId: string, targetFolderId: string) => {
+    const updated = { ...mapFolderMap, [mapId]: targetFolderId };
+    setMapFolderMap(updated);
+    await storage.setSetting('mindsprout_map_folders', JSON.stringify(updated));
+    syncFoldersToDriveConfig(folders, updated);
+  }, [folders, mapFolderMap, syncFoldersToDriveConfig]);
+
   // --- Local Mode Helper ---
   // Seed initial local maps if empty
   const getLocalMaps = useCallback(async (): Promise<any[]> => {
@@ -488,6 +511,35 @@ export const useMindMap = () => {
       const token = await getValidToken();
       const folderId = localStorage.getItem('google_folder_id') || googleFolderId;
       if (!folderId || !token) return;
+
+      // Sync Google Drive mindsprout_config.json for cross-device folders
+      try {
+        const { data: driveConfig } = await googleDriveClient.getOrCreateConfigFile(token, folderId);
+        if (driveConfig) {
+          let mergedFolders: FolderItem[] = [...folders];
+          if (driveConfig.folders && Array.isArray(driveConfig.folders)) {
+            driveConfig.folders.forEach((df: FolderItem) => {
+              if (!mergedFolders.some(f => f.id === df.id)) {
+                mergedFolders.push(df);
+              } else {
+                mergedFolders = mergedFolders.map(f => f.id === df.id ? { ...f, name: df.name } : f);
+              }
+            });
+          }
+          if (mergedFolders.length === 0) {
+            mergedFolders = [{ id: 'default', name: t('myMindMaps'), isCollapsed: false }];
+          }
+
+          const mergedMapFolders = { ...mapFolderMap, ...(driveConfig.mapFolderMap || {}) };
+
+          setFolders(mergedFolders);
+          setMapFolderMap(mergedMapFolders);
+          await storage.setSetting('mindsprout_folders', JSON.stringify(mergedFolders));
+          await storage.setSetting('mindsprout_map_folders', JSON.stringify(mergedMapFolders));
+        }
+      } catch (configErr) {
+        console.error('Failed to sync Google Drive config file:', configErr);
+      }
 
       // 1. Fetch current maps from Google Drive
       const driveFiles = await googleDriveClient.listSproutFiles(token, folderId);

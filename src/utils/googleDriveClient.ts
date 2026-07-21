@@ -206,3 +206,68 @@ export async function deleteSproutFile(token: string, fileId: string): Promise<v
     throw new Error(`Failed to trash file: ${res.status} ${res.statusText} - ${errorText}`);
   }
 }
+
+
+/**
+ * Get or create the mindsprout_config.json file inside the MindSprouts folder.
+ */
+export async function getOrCreateConfigFile(token: string, folderId: string): Promise<{ fileId: string; data: any }> {
+  const q = `'${folderId}' in parents and name = 'mindsprout_config.json' and trashed = false`;
+  const url = `${BASE_URL}/files?q=${encodeURIComponent(q)}&fields=files(id)`;
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Failed to query config file: ${res.status} ${res.statusText} - ${errorText}`);
+  }
+
+  const data = await res.json();
+  if (data.files && data.files.length > 0) {
+    const fileId = data.files[0].id;
+    const content = await downloadSproutFile(token, fileId);
+    return { fileId, data: content };
+  }
+
+  // Create empty config file
+  const metadataUrl = `${BASE_URL}/files`;
+  const metadataRes = await fetch(metadataUrl, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      name: 'mindsprout_config.json',
+      mimeType: 'application/json',
+      parents: [folderId]
+    })
+  });
+
+  if (!metadataRes.ok) {
+    const errorText = await metadataRes.text();
+    throw new Error(`Failed to create config file metadata: ${metadataRes.status} ${metadataRes.statusText} - ${errorText}`);
+  }
+
+  const fileInfo = await metadataRes.json();
+  const fileId = fileInfo.id;
+  const defaultConfig = { folders: [], mapFolderMap: {}, updated_at: new Date().toISOString() };
+  await updateSproutFile(token, fileId, defaultConfig);
+
+  return { fileId, data: defaultConfig };
+}
+
+/**
+ * Save / Update the mindsprout_config.json file on Google Drive.
+ */
+export async function saveConfigFile(token: string, folderId: string, configData: any): Promise<void> {
+  const { fileId } = await getOrCreateConfigFile(token, folderId);
+  await updateSproutFile(token, fileId, {
+    ...configData,
+    updated_at: new Date().toISOString()
+  });
+}
