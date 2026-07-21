@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as http from 'http';
 import initSqlJs from 'sql.js';
 
 let mainWindow: BrowserWindow | null = null;
@@ -137,9 +138,67 @@ function registerIpcHandlers() {
   });
 }
 
+function startLocalServer(distPath: string, preferredPort: number = 5173): Promise<string> {
+  const mimeTypes: Record<string, string> = {
+    '.html': 'text/html',
+    '.js': 'text/javascript',
+    '.css': 'text/css',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.ico': 'image/x-icon',
+    '.svg': 'image/svg+xml',
+    '.json': 'application/json',
+    '.wasm': 'application/wasm'
+  };
+
+  const createServerOnPort = (port: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const server = http.createServer((req, res) => {
+        let reqUrl = req.url || '/';
+        if (reqUrl.includes('?')) reqUrl = reqUrl.split('?')[0];
+        let filePath = path.join(distPath, reqUrl === '/' ? 'index.html' : reqUrl);
+
+        if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+          filePath = path.join(distPath, 'index.html');
+        }
+
+        const ext = path.extname(filePath).toLowerCase();
+        const contentType = mimeTypes[ext] || 'application/octet-stream';
+
+        fs.readFile(filePath, (err, data) => {
+          if (err) {
+            res.writeHead(500);
+            res.end('Server Error');
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': contentType });
+          res.end(data);
+        });
+      });
+
+      server.on('error', (err: any) => {
+        if (err.code === 'EADDRINUSE' && port !== 0) {
+          console.log(`Port ${port} in use, trying random port...`);
+          resolve(createServerOnPort(0));
+        } else {
+          reject(err);
+        }
+      });
+
+      server.listen(port, '127.0.0.1', () => {
+        const address = server.address() as any;
+        console.log(`Local static server running at http://localhost:${address.port}`);
+        resolve(`http://localhost:${address.port}`);
+      });
+    });
+  };
+
+  return createServerOnPort(preferredPort);
+}
+
 const standardChromeUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
-function createWindow() {
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -158,7 +217,9 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    const distPath = path.join(__dirname, '../dist');
+    const localUrl = await startLocalServer(distPath, 5173);
+    mainWindow.loadURL(localUrl);
   }
 
   mainWindow.on('closed', () => {
@@ -175,11 +236,11 @@ app.whenReady().then(async () => {
     contents.setUserAgent(standardChromeUserAgent);
   });
 
-  createWindow();
+  await createWindow();
 
-  app.on('activate', () => {
+  app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      await createWindow();
     }
   });
 });
