@@ -39,8 +39,6 @@ const migrateTree = (loadedTree: MindMapNode): MindMapNode => {
   };
 };
 
-const isElectron = typeof window !== 'undefined' && typeof window.electronAPI !== 'undefined';
-
 export const useMindMap = () => {
   const { t } = useI18n();
   // MindMaps List Metadata
@@ -248,7 +246,7 @@ export const useMindMap = () => {
       });
       
       // Silent refresh / restore connection on reload
-      const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
+      const isConnected = localStorage.getItem('google_drive_connected') === 'true';
       const cachedToken = localStorage.getItem('google_access_token');
       const cachedExpiry = localStorage.getItem('google_token_expiry');
       
@@ -268,7 +266,7 @@ export const useMindMap = () => {
   }, [handleSuccessfulLogin]);
 
   const getValidToken = useCallback(async (): Promise<string> => {
-    const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
+    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
     if (!isConnected) throw new Error('Google Drive is not connected');
 
     const token = googleAccessToken || localStorage.getItem('google_access_token');
@@ -352,131 +350,9 @@ export const useMindMap = () => {
 
   // --- Load / Fetch Maps List ---
   const fetchMapsList = useCallback(async () => {
-    const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
-    if (isConnected) {
-      if (!googleAccessToken) {
-        // Connected but waiting for Google access token (e.g. initial load / silent refresh)
-        // Load the local cache first so user does not see a blank sidebar
-        const localMaps = await getLocalMaps();
-        const list = localMaps.map((m) => ({
-          id: m.id,
-          title: m.title,
-          updated_at: m.updated_at
-        }));
-        setMapsList(await applyCustomSort(list));
-        setIsMapsListLoaded(true);
-        return;
-      }
-      setIsSyncing(true);
-      try {
-        const token = await getValidToken();
-        const folderId = localStorage.getItem('google_folder_id') || googleFolderId;
-        if (!folderId) {
-          // Folder is still being initialized in handleSuccessfulLogin, skip listing files for now
-          return;
-        }
-
-        // 1. Fetch current maps from Google Drive
-        const driveFiles = await googleDriveClient.listSproutFiles(token, folderId);
-        
-        // Map Google Drive files into MindMapMetadata array
-        let driveMetadata: MindMapMetadata[] = driveFiles.map(f => {
-          const title = f.name.endsWith('.sprout') ? f.name.slice(0, -7) : f.name;
-          return {
-            id: f.id,
-            title,
-            updated_at: f.modifiedTime || f.createdTime || new Date().toISOString()
-          };
-        });
-
-        // 2. Check if we have local maps that need to be migrated
-        const localMaps = await getLocalMaps();
-        const unmigratedMaps = localMaps.filter(lm => {
-          return lm.id === 'default-map' || !driveMetadata.some(dm => dm.id === lm.id);
-        });
-
-        if (unmigratedMaps.length > 0) {
-          console.log(`Found ${unmigratedMaps.length} unmigrated local maps. Uploading to Google Drive...`);
-          const migratedLocalMaps = [...localMaps];
-
-          for (const localMap of unmigratedMaps) {
-            try {
-              // Create sprout file on Google Drive
-              const newFileId = await googleDriveClient.createSproutFile(token, folderId, localMap.title, {
-                id: localMap.id,
-                title: localMap.title,
-                content: localMap.content
-              });
-
-              // Find index of this local map and update its ID in local storage to the Google Drive file ID
-              const idx = migratedLocalMaps.findIndex(m => m.id === localMap.id);
-              if (idx !== -1) {
-                migratedLocalMaps[idx] = {
-                  ...migratedLocalMaps[idx],
-                  id: newFileId,
-                  updated_at: new Date().toISOString()
-                };
-              }
-              
-              // If the migrated map was the currently active map, update the active map ID
-              if (activeMapId === localMap.id) {
-                setActiveMapId(newFileId);
-                storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, newFileId);
-              }
-
-              driveMetadata.push({
-                id: newFileId,
-                title: localMap.title,
-                updated_at: new Date().toISOString()
-              });
-            } catch (migrationErr) {
-              console.error('Failed to migrate local map to Google Drive:', localMap.title, migrationErr);
-            }
-          }
-
-          // Save the updated IDs back to LocalStorage
-          localStorage.setItem(LOCAL_STORAGE_MAPS_KEY, JSON.stringify(migratedLocalMaps));
-          // Sort by custom order or updated_at descending
-          driveMetadata = await applyCustomSort(driveMetadata);
-        }
-
-        // 3. Update the state with the combined/migrated list
-        if (driveMetadata.length > 0) {
-          setMapsList(await applyCustomSort(driveMetadata));
-          if (!driveMetadata.some((m) => m.id === activeMapId)) {
-            setActiveMapId(driveMetadata[0].id);
-            storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, driveMetadata[0].id);
-          }
-        } else {
-          // If Drive is empty (highly unlikely now), fallback to create default
-          const initial = treeUtils.createInitialTree(
-            t('initRoot'),
-            t('initChild1'),
-            t('initChild1_1'),
-            t('initChild1_2'),
-            t('initChild2'),
-            t('initChild2_1'),
-            t('initChild2_2')
-          );
-          const fileId = await googleDriveClient.createSproutFile(token, folderId, initial.text, {
-            id: '',
-            title: initial.text,
-            content: initial
-          });
-          
-          setMapsList([{ id: fileId, title: initial.text, updated_at: new Date().toISOString() }]);
-          setActiveMapId(fileId);
-          storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, fileId);
-        }
-        setIsMapsListLoaded(true);
-      } catch (err) {
-        console.error('Failed to fetch maps from Google Drive:', err);
-      } finally {
-        setIsSyncing(false);
-      }
-    } else {
-      // Local mode
-      const localMaps = await getLocalMaps();
+    // Phase 1: Always load local SQLite / LocalStorage maps first for instant UI
+    const localMaps = await getLocalMaps();
+    if (localMaps.length > 0) {
       const list = localMaps.map((m) => ({
         id: m.id,
         title: m.title,
@@ -484,130 +360,183 @@ export const useMindMap = () => {
       }));
       setMapsList(await applyCustomSort(list));
       setIsMapsListLoaded(true);
-      
-      // Keep active id consistent
-      if (!list.some((m) => m.id === activeMapId) && list.length > 0) {
+      if (!list.some((m) => m.id === activeMapId)) {
         setActiveMapId(list[0].id);
         storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, list[0].id);
       }
     }
-  }, [user, activeMapId, getLocalMaps, applyCustomSort, getValidToken, googleFolderId, googleAccessToken]);
 
-  // Trigger fetch when user status changes, active ID switches, or folder ID becomes available
+    // Phase 2: Background Google Drive sync (if enabled)
+    const isDriveConnected = localStorage.getItem('google_drive_connected') === 'true';
+    if (!isDriveConnected) {
+      if (localMaps.length === 0) {
+        const initialTree = treeUtils.createInitialTree();
+        const timeString = new Date().toISOString();
+        const initialMap = {
+          id: 'default-map',
+          title: initialTree.text,
+          content: initialTree,
+          updated_at: timeString
+        };
+        await storage.saveMap(initialMap.id, initialMap.title, initialMap.content, initialMap.updated_at);
+        setMapsList([{ id: initialMap.id, title: initialMap.title, updated_at: initialMap.updated_at }]);
+        setActiveMapId(initialMap.id);
+        await storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, initialMap.id);
+        setIsMapsListLoaded(true);
+      }
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const token = await getValidToken();
+      const folderId = localStorage.getItem('google_folder_id') || googleFolderId;
+      if (!folderId || !token) return;
+
+      // 1. Fetch current maps from Google Drive
+      const driveFiles = await googleDriveClient.listSproutFiles(token, folderId);
+      let driveMetadata: MindMapMetadata[] = driveFiles.map(f => {
+        const title = f.name.endsWith('.sprout') ? f.name.slice(0, -7) : f.name;
+        return {
+          id: f.id,
+          title,
+          updated_at: f.modifiedTime || f.createdTime || new Date().toISOString()
+        };
+      });
+
+      // 2. Upload unmigrated local maps to Drive
+      const currentLocalMaps = await getLocalMaps();
+      const unmigratedMaps = currentLocalMaps.filter(lm => {
+        return lm.id === 'default-map' || !driveMetadata.some(dm => dm.id === lm.id);
+      });
+
+      for (const localMap of unmigratedMaps) {
+        try {
+          const newFileId = await googleDriveClient.createSproutFile(token, folderId, localMap.title, {
+            id: localMap.id,
+            title: localMap.title,
+            content: localMap.content
+          });
+          await storage.deleteMap(localMap.id);
+          await storage.saveMap(newFileId, localMap.title, localMap.content, localMap.updated_at);
+          
+          if (activeMapId === localMap.id) {
+            setActiveMapId(newFileId);
+            storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, newFileId);
+          }
+
+          driveMetadata.push({
+            id: newFileId,
+            title: localMap.title,
+            updated_at: localMap.updated_at
+          });
+        } catch (migrationErr) {
+          console.error('Failed to migrate local map to Drive:', localMap.title, migrationErr);
+        }
+      }
+
+      // 3. Download missing Drive maps into local SQLite/LocalStorage
+      const freshLocalMaps = await getLocalMaps();
+      for (const dm of driveMetadata) {
+        if (!freshLocalMaps.some(lm => lm.id === dm.id)) {
+          try {
+            const sproutData = await googleDriveClient.downloadSproutFile(token, dm.id);
+            if (sproutData && sproutData.content) {
+              await storage.saveMap(dm.id, dm.title, sproutData.content, dm.updated_at);
+            }
+          } catch (dlErr) {
+            console.error('Failed to download missing Drive map to local storage:', dm.title, dlErr);
+          }
+        }
+      }
+
+      // 4. Update state with fully synced list
+      const syncedLocalMaps = await getLocalMaps();
+      const syncedList = syncedLocalMaps.map(m => ({
+        id: m.id,
+        title: m.title,
+        updated_at: m.updated_at
+      }));
+
+      setMapsList(await applyCustomSort(syncedList));
+      setIsMapsListLoaded(true);
+    } catch (err) {
+      console.error('Background Google Drive sync failed:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [user, activeMapId, getLocalMaps, applyCustomSort, getValidToken, googleFolderId, t]);
+
   useEffect(() => {
     fetchMapsList();
   }, [user, googleFolderId, googleAccessToken]);
 
+
   // --- Load Selected Map Content ---
   useEffect(() => {
     const loadActiveMapContent = async () => {
-      const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
-      if (isConnected) {
-        if (!isMapsListLoaded) return;
+      if (!activeMapId) return;
 
-        // Prevent loading map content if activeMapId is not a valid Google Drive file ID
-        // (Wait for fetchMapsList to migrate local maps or correct the active ID)
-        const isValidId = mapsList.some(m => m.id === activeMapId);
-        if (!isValidId) return;
+      const localMaps = await getLocalMaps();
+      const activeMap = localMaps.find((m) => m.id === activeMapId);
+      if (activeMap) {
+        const migrated = migrateTree(activeMap.content);
+        const finalTree = isAutoLayout ? treeUtils.clearSubNodeOffsets(migrated) : migrated;
+        setTree(finalTree);
+        setHistory({ past: [], present: finalTree, future: [] });
 
-        setIsSyncing(true);
-        try {
-          const token = await getValidToken();
-          const data = await googleDriveClient.downloadSproutFile(token, activeMapId);
-          if (data && data.content) {
-            const parsed = data.content as MindMapNode;
-            const migrated = migrateTree(parsed);
-            const finalTree = isAutoLayout ? treeUtils.clearSubNodeOffsets(migrated) : migrated;
-            setTree(finalTree);
-            setHistory({ past: [], present: finalTree, future: [] });
-
-            // Restore map-specific transform
-            if (mapTransformsRef.current[activeMapId]) {
-              setTransform(mapTransformsRef.current[activeMapId]);
-            } else {
-              const savedTransforms = await storage.getSetting('mindsprout_map_transforms', '{}');
-              const transforms = savedTransforms ? JSON.parse(savedTransforms) : {};
-              mapTransformsRef.current = { ...mapTransformsRef.current, ...transforms };
-              if (transforms[activeMapId]) {
-                setTransform(transforms[activeMapId]);
-              } else {
-                setTimeout(centerCanvas, 50);
-                setTimeout(centerCanvas, 350);
-              }
-            }
-            setTimeout(() => {
-              setTree((prev) => prev ? { ...prev } : prev);
-            }, 500);
-          }
-        } catch (err) {
-          console.error('Failed to load map content from Google Drive:', err);
-        } finally {
-          setIsSyncing(false);
-        }
-      } else {
-        // Local mode
-        const localMaps = await getLocalMaps();
-        const activeMap = localMaps.find((m) => m.id === activeMapId);
-        if (activeMap) {
-          const migrated = migrateTree(activeMap.content);
-          const finalTree = isAutoLayout ? treeUtils.clearSubNodeOffsets(migrated) : migrated;
-          setTree(finalTree);
-          setHistory({ past: [], present: finalTree, future: [] });
-
-          // Restore map-specific transform
-          if (mapTransformsRef.current[activeMapId]) {
-            setTransform(mapTransformsRef.current[activeMapId]);
+        // Restore map-specific transform
+        if (mapTransformsRef.current[activeMapId]) {
+          setTransform(mapTransformsRef.current[activeMapId]);
+        } else {
+          const savedTransforms = await storage.getSetting('mindsprout_map_transforms', '{}');
+          const transforms = savedTransforms ? JSON.parse(savedTransforms) : {};
+          mapTransformsRef.current = { ...mapTransformsRef.current, ...transforms };
+          if (transforms[activeMapId]) {
+            setTransform(transforms[activeMapId]);
           } else {
-            const savedTransforms = await storage.getSetting('mindsprout_map_transforms', '{}');
-            const transforms = savedTransforms ? JSON.parse(savedTransforms) : {};
-            mapTransformsRef.current = { ...mapTransformsRef.current, ...transforms };
-            if (transforms[activeMapId]) {
-              setTransform(transforms[activeMapId]);
-            } else {
-              setTimeout(centerCanvas, 50);
-              setTimeout(centerCanvas, 350);
-            }
+            setTimeout(centerCanvas, 50);
+            setTimeout(centerCanvas, 350);
           }
-          setTimeout(() => {
-            setTree((prev) => prev ? { ...prev } : prev);
-          }, 500);
-        } else if (localMaps.length > 0) {
-          // Fallback
-          const migrated = migrateTree(localMaps[0].content);
-          const finalTree = isAutoLayout ? treeUtils.clearSubNodeOffsets(migrated) : migrated;
-          setTree(finalTree);
-          setActiveMapId(localMaps[0].id);
-          setHistory({ past: [], present: finalTree, future: [] });
-
-          // Restore map-specific transform
-          const targetId = localMaps[0].id;
-          if (mapTransformsRef.current[targetId]) {
-            setTransform(mapTransformsRef.current[targetId]);
-          } else {
-            const savedTransforms = await storage.getSetting('mindsprout_map_transforms', '{}');
-            const transforms = savedTransforms ? JSON.parse(savedTransforms) : {};
-            mapTransformsRef.current = { ...mapTransformsRef.current, ...transforms };
-            if (transforms[targetId]) {
-              setTransform(transforms[targetId]);
-            } else {
-              setTimeout(centerCanvas, 50);
-              setTimeout(centerCanvas, 350);
-            }
-          }
-          setTimeout(() => {
-            setTree((prev) => prev ? { ...prev } : prev);
-          }, 500);
         }
+        setTimeout(() => {
+          setTree((prev) => prev ? { ...prev } : prev);
+        }, 500);
+      } else if (localMaps.length > 0) {
+        const migrated = migrateTree(localMaps[0].content);
+        const finalTree = isAutoLayout ? treeUtils.clearSubNodeOffsets(migrated) : migrated;
+        setTree(finalTree);
+        setActiveMapId(localMaps[0].id);
+        setHistory({ past: [], present: finalTree, future: [] });
+
+        const targetId = localMaps[0].id;
+        if (mapTransformsRef.current[targetId]) {
+          setTransform(mapTransformsRef.current[targetId]);
+        } else {
+          const savedTransforms = await storage.getSetting('mindsprout_map_transforms', '{}');
+          const transforms = savedTransforms ? JSON.parse(savedTransforms) : {};
+          mapTransformsRef.current = { ...mapTransformsRef.current, ...transforms };
+          if (transforms[targetId]) {
+            setTransform(transforms[targetId]);
+          } else {
+            setTimeout(centerCanvas, 50);
+            setTimeout(centerCanvas, 350);
+          }
+        }
+        setTimeout(() => {
+          setTree((prev) => prev ? { ...prev } : prev);
+        }, 500);
       }
     };
 
     loadActiveMapContent();
-  }, [activeMapId, user, getLocalMaps, centerCanvas, isAutoLayout, getValidToken, isMapsListLoaded]);
+  }, [activeMapId]);
+
 
   // --- Sync / Auto Save Content ---
   const saveMapData = useCallback((currentTree: MindMapNode, forceImmediate = false) => {
     const timeString = new Date().toISOString();
-    const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
+    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
     const targetFileId = activeMapId;
 
     // 1. Always update storage immediately for fast offline saving
@@ -710,7 +639,7 @@ export const useMindMap = () => {
       children: []
     };
     const timeString = new Date().toISOString();
-    const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
+    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
 
     if (isConnected) {
       setIsSyncing(true);
@@ -763,7 +692,7 @@ export const useMindMap = () => {
       switchMap(remaining[0].id);
     }
 
-    const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
+    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
 
     if (isConnected) {
       setIsSyncing(true);
@@ -807,7 +736,7 @@ export const useMindMap = () => {
   const renameMap = useCallback(async (id: string, newTitle: string) => {
     if (newTitle.trim() === '') return;
     const timeString = new Date().toISOString();
-    const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
+    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
 
     if (isConnected) {
       setIsSyncing(true);
@@ -1066,7 +995,7 @@ export const useMindMap = () => {
     const migrated = migrateTree(sanitized);
     const title = migrated.text || t('importedMap');
     const timeString = new Date().toISOString();
-    const isConnected = !isElectron && (localStorage.getItem('google_drive_connected') === 'true');
+    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
 
     if (isConnected) {
       setIsSyncing(true);
@@ -1424,6 +1353,7 @@ export const useMindMap = () => {
     reorderMapsList,
     saveMapData,
     syncStatus,
+    isMapsListLoaded,
     isGoogleDriveConfigured: !!import.meta.env.VITE_GOOGLE_CLIENT_ID,
     isSupabaseConfigured: !!import.meta.env.VITE_GOOGLE_CLIENT_ID
   };
