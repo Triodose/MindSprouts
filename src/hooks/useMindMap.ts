@@ -133,12 +133,10 @@ export const useMindMap = () => {
 
   // Center Canvas Helper (Centers the bounding box of the ENTIRE mind map)
   const centerCanvas = useCallback(() => {
-    const containerEl = document.querySelector('.tree-container');
     const canvasEl = document.querySelector('.canvas-container');
-    const nodeElements = document.querySelectorAll('.node-card');
+    const nodeElements = document.querySelectorAll('.node-card, .node-summary');
 
-    if (containerEl && canvasEl && nodeElements.length > 0) {
-      const containerRect = containerEl.getBoundingClientRect();
+    if (canvasEl && nodeElements.length > 0) {
       const canvasRect = canvasEl.getBoundingClientRect();
 
       let minLeft = Infinity;
@@ -154,19 +152,19 @@ export const useMindMap = () => {
         if (rect.bottom > maxBottom) maxBottom = rect.bottom;
       });
 
+      const screenNodesCenterX = (minLeft + maxRight) / 2;
+      const screenNodesCenterY = (minTop + maxBottom) / 2;
+      const screenCanvasCenterX = canvasRect.left + canvasRect.width / 2;
+      const screenCanvasCenterY = canvasRect.top + canvasRect.height / 2;
+
       setTransform((prev) => {
         const zoom = prev.zoom || 1;
-        const unzoomedMinLeft = (minLeft - containerRect.left) / zoom;
-        const unzoomedMinTop = (minTop - containerRect.top) / zoom;
-        const unzoomedWidth = (maxRight - minLeft) / zoom;
-        const unzoomedHeight = (maxBottom - minTop) / zoom;
-
-        const treeCenterX = unzoomedMinLeft + unzoomedWidth / 2;
-        const treeCenterY = unzoomedMinTop + unzoomedHeight / 2;
+        const dx = (screenCanvasCenterX - screenNodesCenterX) / zoom;
+        const dy = (screenCanvasCenterY - screenNodesCenterY) / zoom;
 
         return {
-          x: canvasRect.width / 2 - treeCenterX,
-          y: canvasRect.height / 2 - treeCenterY,
+          x: prev.x + dx,
+          y: prev.y + dy,
           zoom: 1
         };
       });
@@ -499,20 +497,10 @@ export const useMindMap = () => {
         setTree(finalTree);
         setHistory({ past: [], present: finalTree, future: [] });
 
-        // Restore map-specific transform
-        if (mapTransformsRef.current[activeMapId]) {
-          setTransform(mapTransformsRef.current[activeMapId]);
-        } else {
-          const savedTransforms = await storage.getSetting('mindsprout_map_transforms', '{}');
-          const transforms = savedTransforms ? JSON.parse(savedTransforms) : {};
-          mapTransformsRef.current = { ...mapTransformsRef.current, ...transforms };
-          if (transforms[activeMapId]) {
-            setTransform(transforms[activeMapId]);
-          } else {
-            setTimeout(centerCanvas, 50);
-            setTimeout(centerCanvas, 350);
-          }
-        }
+        setTimeout(centerCanvas, 50);
+        setTimeout(centerCanvas, 200);
+        setTimeout(centerCanvas, 500);
+
         setTimeout(() => {
           setTree((prev) => prev ? { ...prev } : prev);
         }, 500);
@@ -523,20 +511,10 @@ export const useMindMap = () => {
         setActiveMapId(localMaps[0].id);
         setHistory({ past: [], present: finalTree, future: [] });
 
-        const targetId = localMaps[0].id;
-        if (mapTransformsRef.current[targetId]) {
-          setTransform(mapTransformsRef.current[targetId]);
-        } else {
-          const savedTransforms = await storage.getSetting('mindsprout_map_transforms', '{}');
-          const transforms = savedTransforms ? JSON.parse(savedTransforms) : {};
-          mapTransformsRef.current = { ...mapTransformsRef.current, ...transforms };
-          if (transforms[targetId]) {
-            setTransform(transforms[targetId]);
-          } else {
-            setTimeout(centerCanvas, 50);
-            setTimeout(centerCanvas, 350);
-          }
-        }
+        setTimeout(centerCanvas, 50);
+        setTimeout(centerCanvas, 200);
+        setTimeout(centerCanvas, 500);
+
         setTimeout(() => {
           setTree((prev) => prev ? { ...prev } : prev);
         }, 500);
@@ -544,8 +522,7 @@ export const useMindMap = () => {
     };
 
     loadActiveMapContent();
-  }, [activeMapId]);
-
+  }, [activeMapId, centerCanvas]);
 
   // --- Sync / Auto Save Content ---
   const saveMapData = useCallback((currentTree: MindMapNode, forceImmediate = false) => {
