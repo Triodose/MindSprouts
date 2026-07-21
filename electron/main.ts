@@ -137,6 +137,8 @@ function registerIpcHandlers() {
   });
 }
 
+const standardChromeUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -147,6 +149,8 @@ function createWindow() {
       nodeIntegration: false
     }
   });
+
+  mainWindow.webContents.setUserAgent(standardChromeUserAgent);
 
   // Check if we are running in development mode
   const isDev = !app.isPackaged;
@@ -165,6 +169,12 @@ function createWindow() {
 app.whenReady().then(async () => {
   await initDatabase();
   registerIpcHandlers();
+  
+  // Set User-Agent for all web contents including Google Login popups
+  app.on('web-contents-created', (_, contents) => {
+    contents.setUserAgent(standardChromeUserAgent);
+  });
+
   createWindow();
 
   app.on('activate', () => {
