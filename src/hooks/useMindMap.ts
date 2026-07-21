@@ -131,30 +131,42 @@ export const useMindMap = () => {
   const activeMapIdRef = useRef(activeMapId);
   const mapTransformsRef = useRef<Record<string, CanvasTransform>>({});
 
-  // Center Canvas Helper
+  // Center Canvas Helper (Centers the bounding box of the ENTIRE mind map)
   const centerCanvas = useCallback(() => {
-    const rootEl = document.querySelector('[data-node-id="root"]');
     const containerEl = document.querySelector('.tree-container');
     const canvasEl = document.querySelector('.canvas-container');
+    const nodeElements = document.querySelectorAll('.node-card');
 
-    if (rootEl && containerEl && canvasEl) {
-      const rootRect = rootEl.getBoundingClientRect();
+    if (containerEl && canvasEl && nodeElements.length > 0) {
       const containerRect = containerEl.getBoundingClientRect();
       const canvasRect = canvasEl.getBoundingClientRect();
 
-      setTransform((prev) => {
-        // Calculate the zoom-independent coordinates of the root card relative to the tree-container origin
-        const unzoomedCardLeft = (rootRect.left - containerRect.left) / prev.zoom;
-        const unzoomedCardTop = (rootRect.top - containerRect.top) / prev.zoom;
-        const cardWidth = rootEl.clientWidth;
-        const cardHeight = rootEl.clientHeight;
+      let minLeft = Infinity;
+      let minTop = Infinity;
+      let maxRight = -Infinity;
+      let maxBottom = -Infinity;
 
-        const canvasCardCenterX = unzoomedCardLeft + cardWidth / 2;
-        const canvasCardCenterY = unzoomedCardTop + cardHeight / 2;
+      nodeElements.forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.left < minLeft) minLeft = rect.left;
+        if (rect.top < minTop) minTop = rect.top;
+        if (rect.right > maxRight) maxRight = rect.right;
+        if (rect.bottom > maxBottom) maxBottom = rect.bottom;
+      });
+
+      setTransform((prev) => {
+        const zoom = prev.zoom || 1;
+        const unzoomedMinLeft = (minLeft - containerRect.left) / zoom;
+        const unzoomedMinTop = (minTop - containerRect.top) / zoom;
+        const unzoomedWidth = (maxRight - minLeft) / zoom;
+        const unzoomedHeight = (maxBottom - minTop) / zoom;
+
+        const treeCenterX = unzoomedMinLeft + unzoomedWidth / 2;
+        const treeCenterY = unzoomedMinTop + unzoomedHeight / 2;
 
         return {
-          x: canvasRect.width / 2 - canvasCardCenterX,
-          y: canvasRect.height / 2 - canvasCardCenterY,
+          x: canvasRect.width / 2 - treeCenterX,
+          y: canvasRect.height / 2 - treeCenterY,
           zoom: 1
         };
       });
