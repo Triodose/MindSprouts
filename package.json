@@ -9,24 +9,23 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "electron:build-main": "esbuild electron/main.ts electron/preload.ts --platform=node --outdir=dist-electron --bundle --external:electron --external:better-sqlite3 --out-extension:.js=.cjs",
+    "electron:build-main": "esbuild electron/main.ts electron/preload.ts --platform=node --outdir=dist-electron --bundle --external:electron --external:sql.js --out-extension:.js=.cjs",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && npm run electron:build-main && electron dist-electron/main.cjs\"",
     "electron:dist": "npm run build && npm run electron:build-main && electron-builder"
   },
   "dependencies": {
-    "better-sqlite3": "^12.11.1",
     "html2canvas": "^1.4.1",
     "lucide-react": "^1.23.0",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "sql.js": "^1.14.1"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.2.0",
-    "@types/better-sqlite3": "^7.6.13",
     "@types/google.accounts": "^0.0.14",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/sql.js": "^1.4.11",
     "@vitejs/plugin-react": "^6.0.3",
     "concurrently": "^10.0.3",
     "electron": "^43.1.1",

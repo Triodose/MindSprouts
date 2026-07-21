@@ -1,24 +1,36 @@
 import { app, BrowserWindow, ipcMain } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import Database from 'better-sqlite3';
+import initSqlJs from 'sql.js';
 
 let mainWindow: BrowserWindow | null = null;
 let db: any = null;
+let dbPath: string = '';
 
 // Initialize Database
-function initDatabase() {
+async function initDatabase() {
+  const SQL = await initSqlJs();
   const userDataPath = app.getPath('userData');
   if (!fs.existsSync(userDataPath)) {
     fs.mkdirSync(userDataPath, { recursive: true });
   }
-  const dbPath = path.join(userDataPath, 'local.db');
+  dbPath = path.join(userDataPath, 'local.db');
   console.log('Database path:', dbPath);
 
-  db = new Database(dbPath);
+  if (fs.existsSync(dbPath)) {
+    try {
+      const fileBuffer = fs.readFileSync(dbPath);
+      db = new SQL.Database(fileBuffer);
+    } catch (e) {
+      console.error('Failed to load existing database, creating a new one:', e);
+      db = new SQL.Database();
+    }
+  } else {
+    db = new SQL.Database();
+  }
 
-  // Create tables
-  db.exec(`
+  // Create tables if not exist
+  db.run(`
     CREATE TABLE IF NOT EXISTS maps (
       id TEXT PRIMARY KEY,
       title TEXT,
@@ -27,23 +39,44 @@ function initDatabase() {
     )
   `);
 
-  db.exec(`
+  db.run(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT
     )
   `);
+
+  saveDatabaseToDisk();
+}
+
+function saveDatabaseToDisk() {
+  try {
+    const data = db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(dbPath, buffer);
+  } catch (e) {
+    console.error('Failed to save database to disk:', e);
+  }
 }
 
 // IPC Handlers
 function registerIpcHandlers() {
   ipcMain.handle('db:getMaps', async () => {
     try {
-      const rows = db.prepare('SELECT * FROM maps').all();
-      return rows.map((row: any) => ({
-        ...row,
-        content: JSON.parse(row.content)
-      }));
+      const res = db.exec('SELECT * FROM maps');
+      if (res.length === 0) return [];
+      const columns = res[0].columns;
+      const values = res[0].values;
+      return values.map((row: any) => {
+        const obj: any = {};
+        columns.forEach((col: string, idx: number) => {
+          obj[col] = row[idx];
+        });
+        return {
+          ...obj,
+          content: JSON.parse(obj.content)
+        };
+      });
     } catch (e) {
       console.error('Failed to get maps:', e);
       return [];
@@ -53,15 +86,11 @@ function registerIpcHandlers() {
   ipcMain.handle('db:saveMap', async (_, id: string, title: string, content: any, updatedAt: string) => {
     try {
       const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
-      const stmt = db.prepare(`
-        INSERT INTO maps (id, title, content, updated_at)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          title = excluded.title,
-          content = excluded.content,
-          updated_at = excluded.updated_at
-      `);
-      stmt.run(id, title, contentStr, updatedAt);
+      db.run(
+        `INSERT OR REPLACE INTO maps (id, title, content, updated_at) VALUES (?, ?, ?, ?)`,
+        [id, title, contentStr, updatedAt]
+      );
+      saveDatabaseToDisk();
       return { success: true };
     } catch (e) {
       console.error('Failed to save map:', e);
@@ -71,7 +100,8 @@ function registerIpcHandlers() {
 
   ipcMain.handle('db:deleteMap', async (_, id: string) => {
     try {
-      db.prepare('DELETE FROM maps WHERE id = ?').run(id);
+      db.run('DELETE FROM maps WHERE id = ?', [id]);
+      saveDatabaseToDisk();
       return { success: true };
     } catch (e) {
       console.error('Failed to delete map:', e);
@@ -81,8 +111,9 @@ function registerIpcHandlers() {
 
   ipcMain.handle('db:getSetting', async (_, key: string) => {
     try {
-      const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as any;
-      return row ? row.value : null;
+      const res = db.exec('SELECT value FROM settings WHERE key = ?', [key]);
+      if (res.length === 0) return null;
+      return res[0].values[0][0];
     } catch (e) {
       console.error('Failed to get setting:', e);
       return null;
@@ -91,12 +122,11 @@ function registerIpcHandlers() {
 
   ipcMain.handle('db:setSetting', async (_, key: string, value: string) => {
     try {
-      db.prepare(`
-        INSERT INTO settings (key, value)
-        VALUES (?, ?)
-        ON CONFLICT(key) DO UPDATE SET
-          value = excluded.value
-      `).run(key, value);
+      db.run(
+        'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+        [key, value]
+      );
+      saveDatabaseToDisk();
       return { success: true };
     } catch (e) {
       console.error('Failed to set setting:', e);
@@ -130,8 +160,8 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
-  initDatabase();
+app.whenReady().then(async () => {
+  await initDatabase();
   registerIpcHandlers();
   createWindow();
 
