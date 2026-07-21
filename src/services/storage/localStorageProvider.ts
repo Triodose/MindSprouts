@@ -1,4 +1,4 @@
-import { StorageProvider, MindMap } from './storageInterface';
+import type { StorageProvider, MindMap } from './storageInterface';
 
 export const localStorageProvider: StorageProvider = {
   getMaps: async (): Promise<MindMap[]> => {

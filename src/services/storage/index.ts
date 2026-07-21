@@ -1,4 +1,4 @@
-import { StorageProvider } from './storageInterface';
+import type { StorageProvider } from './storageInterface';
 import { localStorageProvider } from './localStorageProvider';
 import { sqliteStorageProvider } from './sqliteStorageProvider';
 

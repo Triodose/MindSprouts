@@ -2,14 +2,15 @@
   "name": "mindsprout",
   "private": true,
   "version": "0.0.0",
-  "main": "dist-electron/main.js",
+  "type": "module",
+  "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "electron:build-main": "esbuild electron/main.ts electron/preload.ts --platform=node --outdir=dist-electron --bundle --external:electron --external:better-sqlite3",
-    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && npm run electron:build-main && electron dist-electron/main.js\"",
+    "electron:build-main": "esbuild electron/main.ts electron/preload.ts --platform=node --outdir=dist-electron --bundle --external:electron --external:better-sqlite3 --out-extension:.js=.cjs",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && npm run electron:build-main && electron dist-electron/main.cjs\"",
     "electron:dist": "npm run build && npm run electron:build-main && electron-builder"
   },
   "dependencies": {

@@ -1348,16 +1348,9 @@ export const useMindMap = () => {
       const orderIds = result.map(m => m.id);
       storage.setSetting('mindsprout_maps_order', JSON.stringify(orderIds));
       
-      const isConnected = localStorage.getItem('google_drive_connected') === 'true';
-      if (!isConnected) {
-        const localMaps = await getLocalMaps();
-        const newLocalMaps = orderIds.map(id => localMaps.find(m => m.id === id)).filter(Boolean);
-        localStorage.setItem(LOCAL_STORAGE_MAPS_KEY, JSON.stringify(newLocalMaps));
-      }
-      
       return result;
     });
-  }, [getLocalMaps]);
+  }, []);
 
   return {
     tree,
