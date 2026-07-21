@@ -520,13 +520,18 @@ export const useMindMap = () => {
             setHistory({ past: [], present: finalTree, future: [] });
 
             // Restore map-specific transform
-            const savedTransforms = localStorage.getItem('mindsprout_map_transforms');
-            const transforms = savedTransforms ? JSON.parse(savedTransforms) : {};
-            if (transforms[activeMapId]) {
-              setTransform(transforms[activeMapId]);
+            if (mapTransformsRef.current[activeMapId]) {
+              setTransform(mapTransformsRef.current[activeMapId]);
             } else {
-              setTimeout(centerCanvas, 50);
-              setTimeout(centerCanvas, 350);
+              const savedTransforms = await storage.getSetting('mindsprout_map_transforms', '{}');
+              const transforms = savedTransforms ? JSON.parse(savedTransforms) : {};
+              mapTransformsRef.current = { ...mapTransformsRef.current, ...transforms };
+              if (transforms[activeMapId]) {
+                setTransform(transforms[activeMapId]);
+              } else {
+                setTimeout(centerCanvas, 50);
+                setTimeout(centerCanvas, 350);
+              }
             }
             setTimeout(() => {
               setTree((prev) => prev ? { ...prev } : prev);
@@ -660,7 +665,8 @@ export const useMindMap = () => {
 
   // Save transform state
   useEffect(() => {
-    if (activeMapId) {
+    // Only update transform for activeMapId if activeMapId has not just switched
+    if (activeMapId && activeMapId === activeMapIdRef.current) {
       mapTransformsRef.current[activeMapId] = transform;
       storage.setSetting('mindsprout_map_transforms', JSON.stringify(mapTransformsRef.current));
     }
