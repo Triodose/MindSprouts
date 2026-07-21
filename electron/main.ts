@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
@@ -199,10 +199,12 @@ function startLocalServer(distPath: string, preferredPort: number = 5173): Promi
 const standardChromeUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
 async function createWindow() {
+  Menu.setApplicationMenu(null);
   const iconPath = path.join(__dirname, '../build/icon.png');
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    autoHideMenuBar: true,
     icon: fs.existsSync(iconPath) ? iconPath : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
