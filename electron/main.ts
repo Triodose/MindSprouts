@@ -138,7 +138,7 @@ function registerIpcHandlers() {
   });
 }
 
-function startLocalServer(distPath: string, preferredPort: number = 5173): Promise<string> {
+function startLocalServer(distPath: string, preferredPort: number = 5189): Promise<string> {
   const mimeTypes: Record<string, string> = {
     '.html': 'text/html',
     '.js': 'text/javascript',
@@ -218,11 +218,11 @@ async function createWindow() {
   // Check if we are running in development mode
   const isDev = !app.isPackaged;
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.loadURL('http://localhost:5189');
     mainWindow.webContents.openDevTools();
   } else {
     const distPath = path.join(__dirname, '../dist');
-    const localUrl = await startLocalServer(distPath, 5173);
+    const localUrl = await startLocalServer(distPath, 5189);
     mainWindow.loadURL(localUrl);
   }
 
