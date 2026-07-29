@@ -213,6 +213,8 @@ async function createWindow() {
     }
   });
 
+  mainWindow.maximize(); // Maximize window on startup
+
   mainWindow.webContents.setUserAgent(standardChromeUserAgent);
 
   // Check if we are running in development mode
