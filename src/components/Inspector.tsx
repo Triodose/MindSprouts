@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { MindMapNode, MindMapTheme } from '../types/mindmap';
 import { THEMES } from '../utils/themes';
-import { Flag, Star, Heart, HelpCircle, Info, Sliders, Settings } from 'lucide-react';
+import { Flag, Star, Heart, HelpCircle, Info, Sliders, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import { findParent } from '../utils/treeUtils';
 import { useI18n } from '../context/I18nContext';
 
@@ -87,6 +87,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   const rootNode = tree.children.find((c) => c.id === 'root');
   const isTimelineMode = rootNode?.style?.structure === 'timeline';
   const [activeTab, setActiveTab] = React.useState<'node' | 'map'>('node');
+  const [isOpen, setIsOpen] = useState(true);
 
   const renderProgressIconSvg = (progress: number) => {
     const radius = 3;
@@ -503,7 +504,42 @@ export const Inspector: React.FC<InspectorProps> = ({
   const currentBorderColor = selectedNode?.style?.borderColor || '';
 
   return (
-    <div className="inspector-panel glass-panel">
+    <>
+      {/* Toggle Button */}
+      <button
+        className="inspector-toggle-btn glass-panel"
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          position: 'fixed',
+          right: isOpen ? '348px' : '24px',
+          top: '24px',
+          zIndex: 110,
+          background: 'var(--theme-glass-background)',
+          border: '1px solid var(--theme-glass-border)',
+          color: 'var(--theme-text-color)',
+          width: '32px',
+          height: '32px',
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+        }}
+        title={isOpen ? '收合節點設定' : '展開節點設定'}
+      >
+        {isOpen ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+      </button>
+
+      <div 
+        className="inspector-panel glass-panel"
+        style={{
+          transform: isOpen ? 'translateX(0)' : 'translateX(360px)',
+          opacity: isOpen ? 1 : 0,
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
+      >
       {activePicker && (
         <div 
           style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }} 
@@ -1221,6 +1257,7 @@ export const Inspector: React.FC<InspectorProps> = ({
       </div>
       )}
     </div>
+    </>
   );
 };
 export default Inspector;
