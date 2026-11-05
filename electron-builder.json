@@ -2,26 +2,45 @@
   "appId": "com.triodose.mindsprouts",
   "productName": "MindSprouts",
   "directories": {
-    "output": "dist-desktop"
+    "output": "dist"
   },
   "files": [
-    "dist/**/*",
-    "dist-electron/**/*",
-    "build/**/*",
-    "package.json"
+    "package.json",
+    {
+      "from": "dist/renderer",
+      "to": "dist/renderer",
+      "filter": [
+        "**/*"
+      ]
+    },
+    {
+      "from": "dist/electron",
+      "to": "dist/electron",
+      "filter": [
+        "**/*"
+      ]
+    },
+    {
+      "from": "build",
+      "to": "build",
+      "filter": [
+        "icon-v3.png",
+        "icon-v3.ico"
+      ]
+    }
   ],
   "win": {
     "target": "nsis",
-    "icon": "build/icon.ico"
+    "icon": "build/icon-v3.ico"
   },
   "nsis": {
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "installerIcon": "build/icon.ico",
-    "uninstallerIcon": "build/icon.ico",
-    "installerHeaderIcon": "build/icon.ico"
+    "installerIcon": "build/icon-v3.ico",
+    "uninstallerIcon": "build/icon-v3.ico",
+    "installerHeaderIcon": "build/icon-v3.ico"
   },
   "asar": true
 }

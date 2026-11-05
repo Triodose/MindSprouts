@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
 import { 
   Folder, FileText, Plus, Edit2, Trash2, 
-  ChevronLeft, ChevronRight, Check, X, GripVertical,
-  CloudOff, RefreshCw, Clock, AlertCircle, Cloud, LogOut, LogIn
+  ChevronRight, Check, X, GripVertical,
+  RefreshCw, Settings
 } from 'lucide-react';
 import { FolderPlus, ChevronDown } from 'lucide-react';
 import type { MindMapMetadata, FolderItem } from '../hooks/useMindMap';
-import LogoImage from '../assets/mindsprout_logo_with_text.png';
-import triodoseIcon from '../assets/triodose_icon.png';
 import { useI18n } from '../context/I18nContext';
 
 interface MapListSidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
   mapsList: MindMapMetadata[];
   activeMapId: string;
   onSwitchMap: (id: string) => void;
@@ -25,14 +25,14 @@ interface MapListSidebarProps {
   onDeleteFolder?: (folderId: string) => void;
   onToggleFolderCollapse?: (folderId: string) => void;
   onMoveMapToFolder?: (mapId: string, targetFolderId: string) => void;
-  isGoogleDriveConfigured: boolean;
-  user: any;
+  ready: boolean;
+  directory: string;
+  onChangeWorkspace: () => Promise<void>;
   syncStatus: 'saved' | 'dirty' | 'syncing' | 'error';
-  onLogin: () => void;
-  onLogout: () => void;
 }
 
 export const MapListSidebar: React.FC<MapListSidebarProps> = ({
+  isOpen, onClose,
   mapsList,
   activeMapId,
   onSwitchMap,
@@ -47,14 +47,12 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
   onDeleteFolder,
   onToggleFolderCollapse,
   onMoveMapToFolder,
-  isGoogleDriveConfigured,
-  user,
-  syncStatus,
-  onLogin,
-  onLogout
+  ready,
+  directory,
+  onChangeWorkspace,
+  syncStatus
 }) => {
   const { t } = useI18n();
-  const [isOpen, setIsOpen] = useState(true);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
@@ -121,43 +119,20 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
 
   return (
     <>
-      {/* Toggle Button */}
-      <button
-        className="sidebar-toggle-btn glass-panel"
-        onClick={() => setIsOpen(!isOpen)}
-        style={{
-          position: 'fixed',
-          left: isOpen ? '284px' : '24px',
-          top: '24px',
-          zIndex: 110,
-          background: 'var(--theme-glass-background)',
-          border: '1px solid var(--theme-glass-border)',
-          color: 'var(--theme-text-color)',
-          width: '32px',
-          height: '32px',
-          borderRadius: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-        }}
-      >
-        {isOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-      </button>
-
       {/* Sidebar Panel */}
       <div
         className="map-sidebar glass-panel"
+        inert={!isOpen}
+        aria-label={t('myMindMaps')}
+        data-open={isOpen}
         style={{
           position: 'fixed',
-          left: '24px',
-          top: '24px',
-          bottom: '24px',
+          left: '94px',
+          top: '104px',
+          bottom: '86px',
           width: '260px',
           zIndex: 100,
-          transform: isOpen ? 'translateX(0)' : 'translateX(-320px)',
+          transform: isOpen ? 'translateX(0)' : 'translateX(-420px)',
           opacity: isOpen ? 1 : 0,
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           display: 'flex',
@@ -166,88 +141,12 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
           overflow: 'hidden'
         }}
       >
-        <div 
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '16px',
-            width: '100%',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            padding: '8px 12px',
-            borderRadius: '10px',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
-            boxSizing: 'border-box'
-          }}
-        >
-          <img 
-            src={LogoImage} 
-            alt="MindSprouts" 
-            style={{
-              width: '100%',
-              height: 'auto',
-              maxHeight: '52px',
-              objectFit: 'contain'
-            }}
-          />
-          <span
-            style={{
-              fontSize: '11px',
-              fontWeight: 500,
-              letterSpacing: '0.08em',
-              color: 'var(--theme-text-color)',
-              opacity: 0.5,
-              marginTop: '-6px', // Move up closer to "MindSprouts" text
-              alignSelf: 'flex-start',
-              marginLeft: '43px', // Align "g" with the "M" of MindSprouts
-              textTransform: 'lowercase',
-              fontStyle: 'italic'
-            }}
-          >
-            grow your mindsprouts
-          </span>
-        </div>
-
-        {/* Action Buttons Row */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-          <button
-            className="btn-primary"
-            onClick={() => onCreateNewMap(t('untitledMap'))}
-            style={{
-              flex: 1,
-              padding: '8px 10px',
-              fontSize: '13px',
-              gap: '6px',
-              justifyContent: 'center'
-            }}
-          >
-            <Plus size={15} />
-            <span>{t('newMap')}</span>
-          </button>
-
-          <button
-            className="btn-secondary"
-            onClick={() => onCreateFolder && onCreateFolder(t('untitledFolder'))}
-            title={t('newFolder')}
-            style={{
-              padding: '8px 10px',
-              background: 'rgba(255, 255, 255, 0.08)',
-              border: '1px solid var(--theme-glass-border)',
-              color: 'var(--theme-text-color)',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              gap: '4px',
-              fontSize: '12px'
-            }}
-          >
-            <FolderPlus size={15} />
-            <span>{t('newFolder')}</span>
-          </button>
+        <div className="focus-panel-heading">
+          <strong>{t('myMindMaps')}</strong>
+          <div className="focus-library-actions">
+            <button type="button" className="focus-icon-button" disabled={!ready || !onCreateFolder} onClick={() => onCreateFolder?.(t('untitledFolder'))} title={t('newFolder')} aria-label={t('newFolder')}><FolderPlus size={17}/></button>
+            <button type="button" className="focus-icon-button" onClick={onClose} aria-label={t('closeLibrary')}><X size={17}/></button>
+          </div>
         </div>
 
         {/* Maps & Folders Container */}
@@ -581,149 +480,26 @@ export const MapListSidebar: React.FC<MapListSidebarProps> = ({
           })}
         </div>
 
-                {/* Google Drive Auth Integration */}
-        <div 
-          style={{ 
-            borderTop: '1px solid var(--theme-glass-border)', 
-            paddingTop: '16px', 
-            marginTop: '16px',
-            boxSizing: 'border-box'
-          }}
-        >
-          <div 
-            style={{ 
-              fontSize: '11px', 
-              fontWeight: 600, 
-              textTransform: 'uppercase', 
-              letterSpacing: '0.05em', 
-              color: 'var(--theme-ui-accent-color)', 
-              marginBottom: '8px' 
-            }}
-          >
-            {t('syncStatusTitle')}
+        <div className="workspace-panel">
+          <div className="workspace-heading">
+            <strong>工作目錄</strong>
+            <div className="workspace-actions">
+              <button type="button" className="workspace-icon-button" title="重新整理" aria-label="重新整理工作目錄" disabled={!ready || syncStatus !== 'saved'} onClick={async () => {
+                try {
+                  const result = await window.electronAPI!.refreshWorkspace();
+                  if (result.warnings.length) alert(result.warnings.join('\n'));
+                  location.reload();
+                } catch (error) { alert(String(error)); }
+              }}><RefreshCw size={16} /></button>
+              <button type="button" className="workspace-icon-button" title="切換工作目錄" aria-label="切換工作目錄" disabled={!ready || syncStatus === 'syncing'} onClick={() => void onChangeWorkspace()}>
+                <Settings size={16} />
+              </button>
+            </div>
           </div>
-          <div className="auth-panel">
-            {!isGoogleDriveConfigured ? (
-              <div className="db-status-pill db-status-offline" style={{ alignSelf: 'start' }}>
-                <CloudOff size={14} /> {t('syncStatusLocal')}
-              </div>
-            ) : user ? (
-              <>
-                <div className="user-profile" style={{ margin: 0, justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                    <img
-                      src={user.user_metadata?.avatar_url || 'https://www.gravatar.com/avatar?d=mp'}
-                      alt="Avatar"
-                      className="user-avatar"
-                      style={{ width: '24px', height: '24px' }}
-                    />
-                    <span 
-                      className="user-email" 
-                      title={user.email}
-                      style={{ 
-                        fontSize: '12px', 
-                        overflow: 'hidden', 
-                        textOverflow: 'ellipsis', 
-                        whiteSpace: 'nowrap',
-                        maxWidth: '120px',
-                        opacity: 0.8
-                      }}
-                    >
-                      {user.email}
-                    </span>
-                  </div>
-                  <button 
-                    className="btn-secondary" 
-                    onClick={onLogout} 
-                    title={t('logout')}
-                    style={{ 
-                      padding: '4px 6px', 
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <LogOut size={12} />
-                  </button>
-                </div>
-                
-                <div style={{ display: 'flex', alignItems: 'center', marginTop: '6px' }}>
-                  {syncStatus === 'syncing' && (
-                    <div className="db-status-pill" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', width: '100%', justifyContent: 'center' }}>
-                      <RefreshCw size={12} className="spin" style={{ animation: 'spin 1.5s linear infinite' }} />
-                      {t('syncStatusSyncing')}
-                    </div>
-                  )}
-                  {syncStatus === 'dirty' && (
-                    <div className="db-status-pill" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', width: '100%', justifyContent: 'center' }}>
-                      <Clock size={12} />
-                      {t('syncStatusDirty')}
-                    </div>
-                  )}
-                  {syncStatus === 'error' && (
-                    <div className="db-status-pill" style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', width: '100%', justifyContent: 'center' }}>
-                      <AlertCircle size={12} />
-                      {t('syncStatusError')}
-                    </div>
-                  )}
-                  {syncStatus === 'saved' && (
-                    <div className="db-status-pill db-status-online" style={{ width: '100%', justifyContent: 'center' }}>
-                      <Cloud size={14} /> {t('syncStatusConnected')}
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: '6px', lineHeight: '1.4' }}>
-                  {t('syncPrompt')}
-                </div>
-                <button 
-                  className="btn-primary" 
-                  onClick={onLogin}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <LogIn size={14} /> {t('connectDrive')}
-                </button>
-              </>
-            )}
-          </div>
+          <div title={directory} className="workspace-path">{directory}</div>
+          <div>{t(syncStatus === 'saved' ? 'saveTooltipSaved' : syncStatus === 'error' ? 'syncStatusError' : syncStatus === 'syncing' ? 'syncStatusSyncing' : 'syncStatusDirty')}</div>
         </div>
 
-        {/* Studio Branding */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            marginTop: '16px',
-            opacity: 0.45,
-            transition: 'opacity 0.2s',
-            cursor: 'pointer'
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.opacity = '0.85'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.45'; }}
-          onClick={() => window.open('https://www.triodose.com', '_blank')}
-        >
-          <img 
-            src={triodoseIcon} 
-            alt="Triodose Studio" 
-            style={{ height: '16px', width: '16px', objectFit: 'contain' }}
-          />
-          <span style={{ fontSize: '10px', fontWeight: 500, letterSpacing: '0.05em', color: 'var(--theme-text-color)' }}>
-            Powered by Triodose Digital
-          </span>
-        </div>
       </div>
 
       <style>{`

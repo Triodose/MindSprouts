@@ -1,9 +1,9 @@
-import React, { useRef } from 'react';
-import { 
-  Plus, GitBranch, Trash2, Undo2, Redo2, 
-  ZoomIn, ZoomOut, Maximize, Download, 
+import React, { useRef, useEffect } from 'react';
+import {
+  Plus, GitBranch, Trash2, Undo2, Redo2, Copy, ClipboardPaste,
+  ZoomIn, ZoomOut, Maximize, Download,
   Upload, HelpCircle, FileText, Image as ImageIcon,
-  List, Map, Link2, Sun, Moon, StickyNote, Save, RefreshCw, Globe
+  Link2, Sun, Moon, StickyNote, Save, RefreshCw, Globe, ChevronDown, PanelRight, FolderOpen
 } from 'lucide-react';
 import type { MindMapNode } from '../types/mindmap';
 import * as exportUtils from '../utils/exportUtils';
@@ -11,12 +11,20 @@ import { useI18n } from '../context/I18nContext';
 import type { Language } from '../context/I18nContext';
 
 interface ToolbarProps {
+  navigation: React.ReactNode;
+  inspectorOpen: boolean;
+  onToggleInspector: () => void;
+  directory: string;
+  onChangeWorkspace: () => Promise<void>;
+  zoom: number;
   selectedId: string | null;
+  onCopy: () => void;
+  onPaste: () => void;
+  canCopy: boolean;
+  canPaste: boolean;
   canUndo: boolean;
   canRedo: boolean;
   tree: MindMapNode;
-  isOutlinerMode: boolean;
-  onToggleOutlinerMode: (isOutliner: boolean) => void;
   onAddChild: (parentId: string) => void;
   onAddSibling: (targetId: string) => void;
   onDeleteSelected: (targetId: string) => void;
@@ -39,12 +47,13 @@ interface ToolbarProps {
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
+  navigation, inspectorOpen, onToggleInspector, directory, onChangeWorkspace,
+  zoom,
   selectedId,
   canUndo,
+  onCopy, onPaste, canCopy, canPaste,
   canRedo,
   tree,
-  isOutlinerMode,
-  onToggleOutlinerMode,
   onAddChild,
   onAddSibling,
   onDeleteSelected,
@@ -68,6 +77,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   const { t, language, setLanguage } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const menuRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const dismiss = (event: PointerEvent) => { if (menuRef.current && !menuRef.current.contains(event.target as Node)) menuRef.current.open = false; };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape' && menuRef.current?.open) { menuRef.current.open = false; menuRef.current.querySelector('summary')?.focus(); } };
+    document.addEventListener('pointerdown', dismiss); document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', escape); };
+  }, []);
+  const menuAction = (action: () => void) => { if (menuRef.current) menuRef.current.open = false; action(); };
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
@@ -82,6 +99,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       try {
         if (file.name.endsWith('.json') || file.name.endsWith('.sprout')) {
           const parsed = JSON.parse(text);
+          if (parsed.version !== undefined && parsed.version !== 1) throw new Error('Unsupported document version');
           let treeData = parsed;
           if (parsed && typeof parsed === 'object' && parsed.content) {
             treeData = parsed.content;
@@ -116,262 +134,61 @@ export const Toolbar: React.FC<ToolbarProps> = ({
     }
   };
 
-  return (
-    <div className="toolbar-container glass-panel">
-      {/* 1. View Mode Toggles */}
+  return <>
+    <div className="toolbar-container focus-toolbar" role="toolbar" aria-label={t('editorTools')}>
+      <div className="header-map-tools glass-panel">{navigation}</div>
+      <div className="header-editor-tools glass-panel">
       <div className="toolbar-group">
-        <button
-          className={`toolbar-button ${!isOutlinerMode ? 'active' : ''}`}
-          onClick={() => onToggleOutlinerMode(false)}
-          data-tooltip={t('mindmapMode')}
-        >
-          <Map size={18} />
-        </button>
-        <button
-          className={`toolbar-button ${isOutlinerMode ? 'active' : ''}`}
-          onClick={() => onToggleOutlinerMode(true)}
-          data-tooltip={t('outlineMode')}
-        >
-          <List size={18} />
-        </button>
+        <button className="toolbar-button" disabled={!canUndo} onClick={onUndo} aria-label={t('undo')} data-tooltip={t('undo')}><Undo2 size={18}/></button>
+        <button className="toolbar-button" disabled={!canRedo} onClick={onRedo} aria-label={t('redo')} data-tooltip={t('redo')}><Redo2 size={18}/></button>
+      </div><div className="toolbar-divider"/>
+      <button className="focus-add-button" disabled={!selectedId} onClick={()=>selectedId&&onAddChild(selectedId)} aria-label={t('addChild')}><Plus size={17}/><span>{t('addTopic')}</span></button>
+      <button className="toolbar-button header-secondary-tool" disabled={!selectedId||selectedId==='root'} onClick={()=>selectedId&&onAddSibling(selectedId)} aria-label={t('addSibling')} data-tooltip={t('addSibling')}><GitBranch size={17}/></button>
+      <button className="toolbar-button header-secondary-tool" disabled={!canCopy} onClick={onCopy} aria-label={t('copyBranch')} data-tooltip={t('copyBranch')}><Copy size={17}/></button>
+      <button className="toolbar-button header-secondary-tool" disabled={!canPaste} onClick={onPaste} aria-label={t('pasteBranch')} data-tooltip={t('pasteBranch')}><ClipboardPaste size={17}/></button>
+      <button className="toolbar-button header-secondary-tool" disabled={!selectedId||selectedId==='root'} onClick={()=>selectedId&&onDeleteSelected(selectedId)} aria-label={t('deleteNode')} data-tooltip={t('deleteNode')}><Trash2 size={17}/></button>
+      <div className="toolbar-divider"/>
+      <button className={`toolbar-button ${connectingSourceId ? 'active' : ''}`} disabled={!selectedId && !connectingSourceId} aria-pressed={!!connectingSourceId} aria-label={t(connectingSourceId ? 'cancelConnection' : 'connectNodes')} data-tooltip={t(connectingSourceId ? 'cancelConnection' : 'connectNodes')} onClick={() => connectingSourceId ? onCancelConnection?.() : selectedId && onStartConnection?.(selectedId)}><Link2 size={17}/></button>
+      <button className="toolbar-button toolbar-note-btn" disabled={!selectedId} aria-label={t('editNote')} data-tooltip={t('editNote')} onClick={() => onAddNoteClick?.()}><StickyNote size={17}/></button>
+      <div className="toolbar-divider"/>
       </div>
-
-      <div className="toolbar-divider" />
-
-      {/* Node operations */}
-      <div className="toolbar-group">
-        <button
-          className="toolbar-button"
-          disabled={!selectedId}
-          onClick={() => selectedId && onAddChild(selectedId)}
-          data-tooltip={t('addChild')}
-        >
-          <Plus size={18} />
-        </button>
-        <button
-          className="toolbar-button"
-          disabled={!selectedId || selectedId === 'root'}
-          onClick={() => selectedId && onAddSibling(selectedId)}
-          data-tooltip={t('addSibling')}
-        >
-          <GitBranch size={18} />
-        </button>
-        <button
-          className="toolbar-button"
-          disabled={!selectedId || selectedId === 'root'}
-          onClick={() => selectedId && onDeleteSelected(selectedId)}
-          data-tooltip={t('deleteNode')}
-        >
-          <Trash2 size={18} />
-        </button>
-        {connectingSourceId ? (
-          <button
-            className="toolbar-button active"
-            onClick={() => onCancelConnection?.()}
-            data-tooltip={t('cancelConnection')}
-          >
-            <Link2 size={18} style={{ transform: 'rotate(-45deg)' }} />
-          </button>
-        ) : (
-          <button
-            className="toolbar-button"
-            disabled={!selectedId}
-            onClick={() => selectedId && onStartConnection?.(selectedId)}
-            data-tooltip={t('connectNodes')}
-          >
-            <Link2 size={18} />
-          </button>
-        )}
-        <button
-          className="toolbar-button toolbar-note-btn"
-          disabled={!selectedId}
-          onClick={onAddNoteClick}
-          data-tooltip={t('editNote')}
-        >
-          <StickyNote size={18} />
-        </button>
-      </div>
-
-      <div className="toolbar-divider" />
-
-      {/* History operations */}
-      <div className="toolbar-group">
-        <button
-          className="toolbar-button"
-          disabled={!canUndo}
-          onClick={onUndo}
-          data-tooltip={t('undo')}
-        >
-          <Undo2 size={18} />
-        </button>
-        <button
-          className="toolbar-button"
-          disabled={!canRedo}
-          onClick={onRedo}
-          data-tooltip={t('redo')}
-        >
-          <Redo2 size={18} />
-        </button>
-      </div>
-
-      <div className="toolbar-divider" />
-
-      {/* Canvas operations */}
-      <div className="toolbar-group">
-        <button
-          className="toolbar-button"
-          onClick={onZoomIn}
-          disabled={isOutlinerMode}
-          data-tooltip={isOutlinerMode ? t('mindmapModeOnly') : t('zoomIn')}
-        >
-          <ZoomIn size={18} />
-        </button>
-        <button
-          className="toolbar-button"
-          onClick={onZoomOut}
-          disabled={isOutlinerMode}
-          data-tooltip={isOutlinerMode ? t('mindmapModeOnly') : t('zoomOut')}
-        >
-          <ZoomOut size={18} />
-        </button>
-        <button
-          className="toolbar-button"
-          onClick={onCenterCanvas}
-          disabled={isOutlinerMode}
-          data-tooltip={isOutlinerMode ? t('mindmapModeOnly') : t('centerCanvas')}
-        >
-          <Maximize size={18} />
-        </button>
-      </div>
-
-      <div className="toolbar-divider" />
-
-      {/* File import / export */}
-      <div className="toolbar-group">
-        <button
-          className={`toolbar-button ${syncStatus === 'dirty' ? 'dirty-btn' : ''}`}
-          onClick={onSave}
-          disabled={!isConnected || syncStatus === 'syncing'}
-          data-tooltip={
-            !isConnected
-              ? t('saveTooltipLocal')
-              : syncStatus === 'dirty'
-              ? t('saveTooltipDirty')
-              : syncStatus === 'syncing'
-              ? t('saveTooltipSyncing')
-              : syncStatus === 'error'
-              ? t('saveTooltipError')
-              : t('saveTooltipSaved')
-          }
-        >
-          {syncStatus === 'syncing' ? (
-            <RefreshCw size={18} className="spin" style={{ animation: 'spin 1.5s linear infinite', color: '#3b82f6' }} />
-          ) : (
-            <Save
-              size={18}
-              style={{
-                color: !isConnected
-                  ? 'var(--text-secondary)'
-                  : syncStatus === 'dirty'
-                  ? '#f59e0b'
-                  : syncStatus === 'error'
-                  ? '#ef4444'
-                  : '#22c55e'
-              }}
-            />
-          )}
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".json,.md,.sprout"
-          onChange={handleFileChange}
-          style={{ display: 'none' }}
-        />
-        <button
-          className="toolbar-button"
-          onClick={handleImportClick}
-          data-tooltip={t('importFile')}
-        >
-          <Download size={18} />
-        </button>
-        <button
-          className="toolbar-button"
-          onClick={() => exportUtils.exportToJson(tree, tree.text)}
-          data-tooltip={t('exportJson')}
-        >
-          <Upload size={18} />
-        </button>
-        <button
-          className="toolbar-button"
-          onClick={() => exportUtils.exportToMarkdown(tree, tree.text)}
-          data-tooltip={t('exportMarkdown')}
-        >
-          <FileText size={18} />
-        </button>
-        <button
-          className="toolbar-button"
-          onClick={handleExportPng}
-          disabled={isOutlinerMode}
-          data-tooltip={isOutlinerMode ? t('mindmapModeOnly') : t('exportPng')}
-        >
-          <ImageIcon size={18} />
-        </button>
-      </div>
-
-      <div className="toolbar-divider" />
-
-      {/* UI Theme Toggle */}
-      <div className="toolbar-group">
-        <button
-          className="toolbar-button"
-          onClick={onToggleUiTheme}
-          data-tooltip={uiTheme === 'light' ? t('themeLight') : t('themeDark')}
-        >
-          {uiTheme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
-        </button>
-      </div>
-
-      <div className="toolbar-divider" />
-
-      {/* Language Selector */}
-      <div className="toolbar-group" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <Globe size={18} style={{ opacity: 0.8 }} />
-        <select
-          value={language}
-          onChange={(e) => setLanguage(e.target.value as Language)}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--theme-text-color)',
-            fontSize: '13px',
-            fontWeight: 500,
-            outline: 'none',
-            cursor: 'pointer',
-            padding: '4px 2px',
-            borderRadius: '4px'
-          }}
-          title={t('selectLanguage')}
-        >
-          <option value="zh" style={{ background: 'var(--theme-bg-color)', color: 'var(--theme-text-color)' }}>{t('langZh')}</option>
-          <option value="en" style={{ background: 'var(--theme-bg-color)', color: 'var(--theme-text-color)' }}>{t('langEn')}</option>
-          <option value="ja" style={{ background: 'var(--theme-bg-color)', color: 'var(--theme-text-color)' }}>{t('langJa')}</option>
-        </select>
-      </div>
-
-      <div className="toolbar-divider" />
-
-      {/* Help shortcuts */}
-      <div className="toolbar-group">
-        <button
-          className="toolbar-button"
-          onClick={onOpenShortcuts}
-          data-tooltip={t('shortcutsHelp')}
-        >
-          <HelpCircle size={18} />
-        </button>
+      <div className="header-utility-tools glass-panel">
+      <details className="focus-file-menu" ref={menuRef}>
+        <summary aria-label={t('moreTools')}>{t('fileMenu')}<ChevronDown size={14}/></summary>
+        <div className="focus-menu-content">
+          <button disabled={!canUndo} onClick={()=>menuAction(onUndo)}><Undo2 size={16}/>{t('undo')}</button>
+          <button disabled={!canRedo} onClick={()=>menuAction(onRedo)}><Redo2 size={16}/>{t('redo')}</button>
+          <button disabled={!selectedId && !connectingSourceId} onClick={()=>menuAction(()=>connectingSourceId ? onCancelConnection?.() : selectedId && onStartConnection?.(selectedId))}><Link2 size={16}/>{t(connectingSourceId ? 'cancelConnection' : 'connectNodes')}</button>
+          <button disabled={!selectedId} onClick={()=>menuAction(()=>onAddNoteClick?.())}><StickyNote size={16}/>{t('editNote')}</button>
+          <button disabled={!selectedId||selectedId==='root'} onClick={()=>menuAction(()=>selectedId&&onAddSibling(selectedId))}><GitBranch size={16}/>{t('addSibling')}</button>
+          <button disabled={!canCopy} onClick={()=>menuAction(onCopy)}><Copy size={16}/>{t('copyBranch')}</button>
+          <button disabled={!canPaste} onClick={()=>menuAction(onPaste)}><ClipboardPaste size={16}/>{t('pasteBranch')}</button>
+          <button disabled={!selectedId||selectedId==='root'} onClick={()=>menuAction(()=>selectedId&&onDeleteSelected(selectedId))}><Trash2 size={16}/>{t('deleteNode')}</button>
+          <hr/>
+          <button disabled={syncStatus!=='saved'} onClick={()=>menuAction(async()=>{ try { const result=await window.electronAPI!.refreshWorkspace(); if(result.warnings.length) alert(result.warnings.join('\n')); location.reload(); } catch(error) { alert(String(error)); } })}><RefreshCw size={16}/>重新整理工作區</button>
+          <button aria-label="切換工作目錄" title={directory} disabled={syncStatus==='syncing'} onClick={()=>menuAction(()=>void onChangeWorkspace())}><FolderOpen size={16}/>切換工作區</button>
+          <button disabled={!isConnected||syncStatus==='syncing'} onClick={()=>menuAction(onSave)}><Save size={16}/>{t('saveNow')}</button>
+          <button onClick={()=>menuAction(handleImportClick)}><Download size={16}/>{t('importFile')}</button>
+          <button onClick={()=>menuAction(()=>exportUtils.exportToJson(tree, tree.children?.[0]?.text||tree.text))}><Upload size={16}/>{t('exportJson')}</button>
+          <button onClick={()=>menuAction(()=>exportUtils.exportToMarkdown(tree,tree.children?.[0]?.text||tree.text))}><FileText size={16}/>{t('exportMarkdown')}</button>
+          <button onClick={()=>menuAction(handleExportPng)}><ImageIcon size={16}/>{t('exportPng')}</button>
+          <hr/>
+          <button onClick={()=>menuAction(onToggleUiTheme)}>{uiTheme==='light'?<Moon size={16}/>:<Sun size={16}/>} {t(uiTheme==='light'?'themeLight':'themeDark')}</button>
+          <button onClick={()=>menuAction(onOpenShortcuts)}><HelpCircle size={16}/>{t('shortcutsHelp')}</button>
+          <label><Globe size={16}/><select aria-label={t('selectLanguage')} value={language} onChange={e=>setLanguage(e.target.value as Language)}><option value="zh">{t('langZh')}</option><option value="en">{t('langEn')}</option><option value="ja">{t('langJa')}</option></select></label>
+        </div>
+      </details>
+      <button type="button" className="toolbar-button" aria-label={t('inspectorToggle')} title={t('inspectorToggle')} aria-expanded={inspectorOpen} aria-pressed={inspectorOpen} onClick={onToggleInspector}><PanelRight size={18}/></button>
+      <input ref={fileInputRef} type="file" accept=".json,.md,.sprout" onChange={handleFileChange} style={{display:'none'}}/>
       </div>
     </div>
-  );
+    {connectingSourceId&&<button className="focus-connection-status" onClick={onCancelConnection}><Link2 size={15}/>{t('cancelConnection')}</button>}
+    <div className="focus-zoom-dock glass-panel" role="toolbar" aria-label={t('canvasTools')}>
+      <button className="toolbar-button" onClick={onZoomOut} aria-label={t('zoomOut')}><ZoomOut size={16}/></button>
+      <span>{Math.round(zoom*100)}%</span><button className="toolbar-button" onClick={onZoomIn} aria-label={t('zoomIn')}><ZoomIn size={16}/></button><i/>
+      <button className="toolbar-button" onClick={onCenterCanvas} aria-label={t('centerCanvas')}><Maximize size={16}/></button>
+    </div>
+    <div className={`focus-save-status status-${syncStatus}`} role="status">{syncStatus==='syncing'?<RefreshCw size={12} className="spin"/>:<i/>}{t(syncStatus==='saved'?'saveTooltipSaved':syncStatus==='error'?'saveTooltipError':syncStatus==='syncing'?'saveTooltipSyncing':'saveTooltipDirty')}</div>
+  </>;
 };
 export default Toolbar;

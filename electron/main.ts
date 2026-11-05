@@ -1,206 +1,111 @@
-import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, dialog, shell, clipboard } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import * as http from 'http';
+import { Workspace, atomicWrite, safeName } from './workspace';
+import { randomUUID } from 'node:crypto';
 import initSqlJs from 'sql.js';
 
 let mainWindow: BrowserWindow | null = null;
-let db: any = null;
-let dbPath: string = '';
-
-// Initialize Database
-async function initDatabase() {
-  const SQL = await initSqlJs({
-    locateFile: (file: string) => path.join(app.getAppPath(), 'node_modules/sql.js/dist', file)
-  });
-  const userDataPath = app.getPath('userData');
-  if (!fs.existsSync(userDataPath)) {
-    fs.mkdirSync(userDataPath, { recursive: true });
-  }
-  dbPath = path.join(userDataPath, 'local.db');
-  console.log('Database path:', dbPath);
-
-  if (fs.existsSync(dbPath)) {
-    try {
-      const fileBuffer = fs.readFileSync(dbPath);
-      db = new SQL.Database(fileBuffer);
-    } catch (e) {
-      console.error('Failed to load existing database, creating a new one:', e);
-      db = new SQL.Database();
-    }
-  } else {
-    db = new SQL.Database();
-  }
-
-  // Create tables if not exist
-  db.run(`
-    CREATE TABLE IF NOT EXISTS maps (
-      id TEXT PRIMARY KEY,
-      title TEXT,
-      content TEXT,
-      updated_at TEXT
-    )
-  `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT
-    )
-  `);
-
-  saveDatabaseToDisk();
+let workspace: Workspace | null = null;
+let preferencesPath = '';
+let closeReady = false;
+let rendererReady = false;
+let startupError = '';
+function requireWorkspace() {
+  if (!workspace) throw new Error('請先選擇工作目錄');
+  return workspace;
 }
-
-function saveDatabaseToDisk() {
-  try {
-    const data = db.export();
-    const buffer = Buffer.from(data);
-    fs.writeFileSync(dbPath, buffer);
-  } catch (e) {
-    console.error('Failed to save database to disk:', e);
-  }
-}
-
-// IPC Handlers
 function registerIpcHandlers() {
-  ipcMain.handle('db:getMaps', async () => {
-    try {
-      const res = db.exec('SELECT * FROM maps');
-      if (res.length === 0) return [];
-      const columns = res[0].columns;
-      const values = res[0].values;
-      return values.map((row: any) => {
-        const obj: any = {};
-        columns.forEach((col: string, idx: number) => {
-          obj[col] = row[idx];
-        });
-        return {
-          ...obj,
-          content: JSON.parse(obj.content)
-        };
-      });
-    } catch (e) {
-      console.error('Failed to get maps:', e);
-      return [];
+  ipcMain.handle('nodes:copy', (_, text: string) => { clipboard.writeText(text); });
+  ipcMain.handle('nodes:paste', () => clipboard.readText());
+  ipcMain.on('workspace:rendererReady', (_, ready) => { rendererReady = ready; });
+  ipcMain.on('workspace:closeReady', async (_, success) => {
+    if (!success) {
+      const answer = await dialog.showMessageBox(mainWindow!, { type: 'warning', message: '儲存失敗，是否放棄未儲存的變更並關閉？', buttons: ['返回編輯', '放棄並關閉'], defaultId: 0, cancelId: 0 });
+      if (answer.response !== 1) return;
     }
+    closeReady = true; mainWindow?.close();
   });
-
-  ipcMain.handle('db:saveMap', async (_, id: string, title: string, content: any, updatedAt: string) => {
-    try {
-      const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
-      db.run(
-        `INSERT OR REPLACE INTO maps (id, title, content, updated_at) VALUES (?, ?, ?, ?)`,
-        [id, title, contentStr, updatedAt]
-      );
-      saveDatabaseToDisk();
-      return { success: true };
-    } catch (e) {
-      console.error('Failed to save map:', e);
-      return { success: false, error: String(e) };
-    }
+  ipcMain.handle('workspace:info', () => ({ directory: workspace?.directory || null, warnings: workspace?.warnings || (startupError ? [startupError] : []) }));
+  ipcMain.handle('workspace:select', async () => {
+    const result = await dialog.showOpenDialog(mainWindow!, { properties: ['openDirectory', 'createDirectory'] });
+    if (result.canceled) return null;
+    const candidate = new Workspace(result.filePaths[0]);
+    atomicWrite(preferencesPath, JSON.stringify({ directory: candidate.directory }));
+    workspace = candidate;
+    return { directory: candidate.directory, warnings: candidate.warnings };
   });
-
-  ipcMain.handle('db:deleteMap', async (_, id: string) => {
-    try {
-      db.run('DELETE FROM maps WHERE id = ?', [id]);
-      saveDatabaseToDisk();
-      return { success: true };
-    } catch (e) {
-      console.error('Failed to delete map:', e);
-      return { success: false, error: String(e) };
-    }
-  });
-
-  ipcMain.handle('db:getSetting', async (_, key: string) => {
-    try {
-      const res = db.exec('SELECT value FROM settings WHERE key = ?', [key]);
-      if (res.length === 0) return null;
-      return res[0].values[0][0];
-    } catch (e) {
-      console.error('Failed to get setting:', e);
-      return null;
-    }
-  });
-
-  ipcMain.handle('db:setSetting', async (_, key: string, value: string) => {
-    try {
-      db.run(
-        'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
-        [key, value]
-      );
-      saveDatabaseToDisk();
-      return { success: true };
-    } catch (e) {
-      console.error('Failed to set setting:', e);
-      return { success: false, error: String(e) };
-    }
-  });
-}
-
-function startLocalServer(distPath: string, preferredPort: number = 5189): Promise<string> {
-  const mimeTypes: Record<string, string> = {
-    '.html': 'text/html',
-    '.js': 'text/javascript',
-    '.css': 'text/css',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.ico': 'image/x-icon',
-    '.svg': 'image/svg+xml',
-    '.json': 'application/json',
-    '.wasm': 'application/wasm'
-  };
-
-  const createServerOnPort = (port: number): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const server = http.createServer((req, res) => {
-        let reqUrl = req.url || '/';
-        if (reqUrl.includes('?')) reqUrl = reqUrl.split('?')[0];
-        let filePath = path.join(distPath, reqUrl === '/' ? 'index.html' : reqUrl);
-
-        if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-          filePath = path.join(distPath, 'index.html');
-        }
-
-        const ext = path.extname(filePath).toLowerCase();
-        const contentType = mimeTypes[ext] || 'application/octet-stream';
-
-        fs.readFile(filePath, (err, data) => {
-          if (err) {
-            res.writeHead(500);
-            res.end('Server Error');
-            return;
-          }
-          res.writeHead(200, { 'Content-Type': contentType });
-          res.end(data);
-        });
-      });
-
-      server.on('error', (err: any) => {
-        if (err.code === 'EADDRINUSE' && port !== 0) {
-          console.log(`Port ${port} in use, trying random port...`);
-          resolve(createServerOnPort(0));
-        } else {
-          reject(err);
-        }
-      });
-
-      server.listen(port, '127.0.0.1', () => {
-        const address = server.address() as any;
-        console.log(`Local static server running at http://localhost:${address.port}`);
-        resolve(`http://localhost:${address.port}`);
-      });
+  ipcMain.handle('workspace:saveCopy', async (_, title: string, content: any) => {
+    const result = await dialog.showSaveDialog(mainWindow!, {
+      title: '另存心智圖副本', defaultPath: path.join(requireWorkspace().directory, safeName(title) + ' (副本).sprout'),
+      filters: [{ name: 'MindSprouts', extensions: ['sprout'] }]
     });
-  };
-
-  return createServerOnPort(preferredPort);
+    if (result.canceled || !result.filePath) return false;
+    atomicWrite(result.filePath, JSON.stringify({ version: 1, id: randomUUID(), title, content, updated_at: new Date().toISOString() }, null, 2));
+    return true;
+  });
+  ipcMain.handle('workspace:open', () => shell.openPath(requireWorkspace().directory));
+  ipcMain.handle('workspace:refresh', () => { requireWorkspace().readMaps(); return { warnings: workspace!.warnings }; });
+  ipcMain.handle('workspace:migrate', async () => {
+    const target = requireWorkspace();
+    const oldFile = path.join(app.getPath('userData'), 'local.db');
+    if (!fs.existsSync(oldFile)) return { imported: 0, errors: ['找不到舊版 local.db'] };
+    const SQL = await initSqlJs({ locateFile: file => path.join(app.getAppPath(), 'node_modules/sql.js/dist', file) });
+    const db = new SQL.Database(fs.readFileSync(oldFile));
+    const errors: string[] = [];
+    let imported = 0;
+    try {
+      const rows = db.exec('SELECT id, title, content, updated_at FROM maps')[0]?.values || [];
+      const existing = new Set(target.getMaps().map(m => m.id));
+      const legacySettings: Record<string, string> = {};
+      for (const row of db.exec('SELECT key, value FROM settings')[0]?.values || []) legacySettings[String(row[0])] = String(row[1]);
+      const currentFolders = JSON.parse(target.settings.mindsprout_folders || '[]');
+      const folderIds: Record<string, string> = {};
+      for (const folder of JSON.parse(legacySettings.mindsprout_folders || '[]')) {
+        if (folder.id === 'default') continue;
+        const id = currentFolders.some((f: any) => f.id === folder.id) ? randomUUID() : folder.id;
+        folderIds[folder.id] = id;
+        currentFolders.push({ id, name: folder.name, isCollapsed: folder.isCollapsed });
+      }
+      target.setSetting('mindsprout_folders', JSON.stringify(currentFolders));
+      const assignments = JSON.parse(target.settings.mindsprout_map_folders || '{}');
+      const oldAssignments = JSON.parse(legacySettings.mindsprout_map_folders || '{}');
+      for (const row of rows) {
+        try {
+          const id = existing.has(String(row[0])) ? randomUUID() : String(row[0]);
+          target.save({ id, title: String(row[1]), content: JSON.parse(String(row[2])), updated_at: String(row[3]) });
+          if (folderIds[oldAssignments[String(row[0])]]) {
+            assignments[id] = folderIds[oldAssignments[String(row[0])]];
+            target.setSetting('mindsprout_map_folders', JSON.stringify(assignments));
+          }
+          const loaded = new Workspace(target.directory).getMaps().find(m => m.id === id);
+          if (!loaded || JSON.stringify(loaded.content) !== JSON.stringify(JSON.parse(String(row[2])))) throw new Error('讀回驗證失敗');
+          existing.add(id); imported++;
+        } catch (error) { errors.push(`${row[1]}：${String(error)}`); }
+      }
+    } finally { db.close(); }
+    return { imported, errors };
+  });
+  ipcMain.handle('db:getMaps', () => requireWorkspace().getMaps());
+  ipcMain.handle('db:saveMap', (_, id, title, content, updated_at) => {
+    try { requireWorkspace().save({ id, title, content, updated_at }); return { success: true }; }
+    catch (error) { return { success: false, error: String(error) }; }
+  });
+  ipcMain.handle('db:deleteMap', async (_, id) => {
+    try { await requireWorkspace().remove(id, file => shell.trashItem(file)); return { success: true }; }
+    catch (error) { return { success: false, error: String(error) }; }
+  });
+  ipcMain.handle('db:getSetting', (_, key) => requireWorkspace().settings[key] ?? null);
+  ipcMain.handle('db:setSetting', (_, key, value) => {
+    try { requireWorkspace().setSetting(key, value); return { success: true }; }
+    catch (error) { return { success: false, error: String(error) }; }
+  });
 }
-
-const standardChromeUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
 async function createWindow() {
+  closeReady = false;
   Menu.setApplicationMenu(null);
-  const iconPath = path.join(__dirname, '../build/icon.png');
+  const iconPath = path.join(app.getAppPath(), 'build/icon-v3.png');
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -215,33 +120,32 @@ async function createWindow() {
 
   mainWindow.maximize(); // Maximize window on startup
 
-  mainWindow.webContents.setUserAgent(standardChromeUserAgent);
 
   // Check if we are running in development mode
   const isDev = !app.isPackaged;
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5189');
-    mainWindow.webContents.openDevTools();
+    await mainWindow.loadURL('http://localhost:5189');
   } else {
-    const distPath = path.join(__dirname, '../dist');
-    const localUrl = await startLocalServer(distPath, 5189);
-    mainWindow.loadURL(localUrl);
+    const distPath = path.join(__dirname, '../renderer');
+    await mainWindow.loadFile(path.join(distPath, 'index.html'));
   }
 
+  mainWindow.on('close', event => {
+    if (!closeReady && rendererReady) { event.preventDefault(); mainWindow!.webContents.send('workspace:requestClose'); }
+  });
+  mainWindow.webContents.on('will-prevent-unload', event => { if (closeReady) event.preventDefault(); });
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
 
 app.whenReady().then(async () => {
-  await initDatabase();
+  preferencesPath = path.join(app.getPath('userData'), 'workspace.json');
+  try {
+    if (fs.existsSync(preferencesPath)) workspace = new Workspace(JSON.parse(fs.readFileSync(preferencesPath, 'utf8')).directory);
+  } catch (error) { startupError = '上次使用的工作目錄無法開啟：' + String(error); console.error(startupError); }
   registerIpcHandlers();
   
-  // Set User-Agent for all web contents including Google Login popups
-  app.on('web-contents-created', (_, contents) => {
-    contents.setUserAgent(standardChromeUserAgent);
-  });
-
   await createWindow();
 
   app.on('activate', async () => {

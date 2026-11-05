@@ -15,6 +15,7 @@ interface OutlinerProps {
 }
 
 interface FlatNode {
+  strikethrough?: boolean;
   id: string;
   text: string;
   depth: number;
@@ -40,6 +41,7 @@ export const Outliner: React.FC<OutlinerProps> = ({
       result.push({
         id: node.id,
         text: node.text,
+        strikethrough: node.style?.strikethrough,
         depth: depth - 1 // root is depth 0, children depth 1+
       });
     }
@@ -177,7 +179,8 @@ export const Outliner: React.FC<OutlinerProps> = ({
                 placeholder={node.depth === 0 ? t('inputTopicName') : t('branchTopic')}
                 className="outliner-input"
                 style={{
-                  color: isSelected ? theme.accentColor : 'inherit'
+                  color: isSelected ? theme.accentColor : 'inherit',
+                  textDecoration: node.strikethrough ? 'line-through' : 'none'
                 }}
               />
             </div>

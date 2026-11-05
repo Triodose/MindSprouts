@@ -1,5 +1,7 @@
+import { NodeMarker } from './NodeMarker';
+import { fillPattern, nodeFillImage, svgImage } from '../utils/nodeFill';
 import React, { useEffect, useRef, useState } from 'react';
-import { Globe, Flag, Star, Heart, HelpCircle, Info, List } from 'lucide-react';
+import { Globe, List } from 'lucide-react';
 import type { MindMapNode as MindMapNodeType, MindMapTheme } from '../types/mindmap';
 import { useI18n } from '../context/I18nContext';
 
@@ -75,34 +77,6 @@ const renderProgressSvg = (progress: number) => {
   );
 };
 
-const renderFlagIcon = (flagKey: string, t: (k: string) => string) => {
-  const size = 13;
-  switch (flagKey) {
-    case 'red-flag':
-      return <span className="node-badge-flag flag-red" title={t("flagRed")}><Flag size={size} fill="currentColor" /></span>;
-    case 'orange-flag':
-      return <span className="node-badge-flag flag-orange" title={t("flagOrange")}><Flag size={size} fill="currentColor" /></span>;
-    case 'yellow-flag':
-      return <span className="node-badge-flag flag-yellow" title={t("flagYellow")}><Flag size={size} fill="currentColor" /></span>;
-    case 'green-flag':
-      return <span className="node-badge-flag flag-green" title={t("flagGreen")}><Flag size={size} fill="currentColor" /></span>;
-    case 'blue-flag':
-      return <span className="node-badge-flag flag-blue" title={t("flagBlue")}><Flag size={size} fill="currentColor" /></span>;
-    case 'purple-flag':
-      return <span className="node-badge-flag flag-purple" title={t("flagPurple")}><Flag size={size} fill="currentColor" /></span>;
-    case 'star':
-      return <span className="node-badge-flag flag-star" title={t("flagStar")}><Star size={size} fill="currentColor" /></span>;
-    case 'heart':
-      return <span className="node-badge-flag flag-heart" title={t("flagHeart")}><Heart size={size} fill="currentColor" /></span>;
-    case 'question':
-      return <span className="node-badge-flag flag-question" title={t("flagQuestion")}><HelpCircle size={size} /></span>;
-    case 'info':
-      return <span className="node-badge-flag flag-info" title={t("flagInfo")}><Info size={size} /></span>;
-    default:
-      return null;
-  }
-};
-
 const resolveColor = (colorStr: string): string => {
   if (!colorStr || colorStr === 'transparent') return 'transparent';
   if (colorStr.startsWith('var(')) {
@@ -124,7 +98,8 @@ const getDiamondBorderImage = (
   style: string,
   borderColor: string,
   bgColor: string,
-  strokeWidth: number = 2
+  strokeWidth: number = 2,
+  fillStyle?: import('../types/mindmap').NodeStyle['fillStyle']
 ) => {
   const resolvedBorder = resolveColor(borderColor);
   const resolvedBg = resolveColor(bgColor);
@@ -134,12 +109,9 @@ const getDiamondBorderImage = (
   else if (style === 'long-dashed') dashes = "stroke-dasharray='12, 6'";
   else if (style === 'dotted') dashes = "stroke-dasharray='2, 4'";
   
-  const escapedBorder = resolvedBorder.replace('#', '%23');
-  const escapedBg = resolvedBg.replace('#', '%23');
-  
-  // We use vector-effect="non-scaling-stroke" to keep stroke width uniform.
-  // We fill the polygon with the background color so there is no bleed, and keep points slightly inside so it doesn't get clipped.
-  return `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 100 100' preserveAspectRatio='none'%3e%3cpolygon points='50,3.5 96.5,50 50,96.5 3.5,50' fill='${escapedBg}' stroke='${escapedBorder}' stroke-width='${strokeWidth}' vector-effect='non-scaling-stroke' ${dashes}/%3e%3c/svg%3e")`;
+  const pattern = fillPattern(fillStyle, resolvedBg);
+  const escape = (color: string) => color.replace(/&/g, '&amp;').replace(/'/g, '&apos;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  return svgImage(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'><defs>${pattern}</defs><polygon points='50,3.5 96.5,50 50,96.5 3.5,50' fill='${pattern ? 'url(#node-fill)' : escape(resolvedBg)}' stroke='${escape(resolvedBorder)}' stroke-width='${strokeWidth}' vector-effect='non-scaling-stroke' ${dashes}/></svg>`);
 };
 
 const lightenColor = (hexColor: string, percent: number): string => {
@@ -185,6 +157,17 @@ const getNodeColors = (
       borderColor: theme.rootBorder,
       color: theme.rootColor
     };
+  }
+
+  if (theme.id === 'focus-mint' && branchIndex !== undefined) {
+    const palette = [
+      { backgroundColor: '#edf6ef', borderColor: '#d5e5dc', color: '#365d45' },
+      { backgroundColor: '#f0f4fa', borderColor: '#d8e1ed', color: '#3e587a' },
+      { backgroundColor: '#faf3eb', borderColor: '#eedecf', color: '#77543b' },
+      { backgroundColor: '#f6f0fa', borderColor: '#e4d9ed', color: '#694d7d' },
+      { backgroundColor: '#f0f3f4', borderColor: '#dbe2e3', color: '#455c65' },
+    ];
+    return palette[branchIndex % palette.length];
   }
 
   // If there are branch colors and branchIndex is defined, use branch color
@@ -522,7 +505,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
   
   const resolvedColors = getNodeColors(theme, branchIndex, depth, isRoot);
   const effectiveBorderColor = node.style?.borderColor || resolvedColors.borderColor;
-  const effectiveBgColor = node.style?.backgroundColor !== undefined ? node.style.backgroundColor : resolvedColors.backgroundColor;
+  const effectiveBgColor = node.style?.fillStyle === 'none' ? 'transparent' : node.style?.backgroundColor !== undefined ? node.style.backgroundColor : resolvedColors.backgroundColor;
 
   // Build inline styles based on node properties
   const nodeStyles: React.CSSProperties = {
@@ -559,7 +542,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
     nodeStyles.backgroundColor = 'transparent';
     nodeStyles.border = 'none';
     const strokeColor = isSelected ? 'var(--theme-accent-color)' : effectiveBorderColor;
-    nodeStyles.backgroundImage = getDiamondBorderImage(currentBorderStyle, strokeColor, effectiveBgColor, isSelected ? 4 : 2);
+    nodeStyles.backgroundImage = getDiamondBorderImage(currentBorderStyle, strokeColor, effectiveBgColor, isSelected ? 4 : 2, node.style?.fillStyle);
   } else if (currentShape === 'underlined') {
     nodeStyles.backgroundColor = effectiveBgColor;
     nodeStyles.border = 'none';
@@ -567,6 +550,11 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
     nodeStyles.borderRadius = '0';
     nodeStyles.backgroundImage = 'none';
   }
+
+  if (currentShape !== 'diamond') {
+    nodeStyles.backgroundImage = nodeFillImage(node.style?.fillStyle, resolveColor(effectiveBgColor));
+  }
+  if (node.style?.fillStyle === 'none' && !node.style?.color) nodeStyles.color = theme.textColor;
 
   // Custom branch translation transform style
   const branchStyle: React.CSSProperties = {
@@ -706,7 +694,7 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
 
           {/* Main Row: Badges, Text, Note */}
           <div className="node-card-main-row">
-            {node.flag && renderFlagIcon(node.flag, t)}
+            {node.flag && <NodeMarker id={node.flag} t={t}/>}
             {node.priority && (
               <span className={`node-badge-priority priority-${node.priority}`} title={`${t("priority")} P${node.priority}`}>
                 {node.priority}
@@ -726,9 +714,10 @@ export const MindMapNode: React.FC<MindMapNodeProps> = ({
                 onBlur={handleBlur}
                 onKeyDown={handleKeyDown}
                 className="node-input-editor"
+                style={{ textDecoration: node.style?.strikethrough ? 'line-through' : 'none' }}
               />
             ) : (
-              <span className="node-text">{node.text}</span>
+              <span className="node-text" style={{ textDecoration: node.style?.strikethrough ? 'line-through' : 'none' }}>{node.text}</span>
             )}
             {node.note && (
               <span 

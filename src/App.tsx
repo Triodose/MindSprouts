@@ -4,12 +4,13 @@ import { MindMapNode } from './components/MindMapNode';
 import { SVGConnections } from './components/SVGConnections';
 import { Toolbar } from './components/Toolbar';
 import { Inspector } from './components/Inspector';
-import { MapListSidebar } from './components/MapListSidebar';
+import { MapTabs } from './components/MapTabs';
 import { ShortcutHelper } from './components/ShortcutHelper';
-import { Outliner } from './components/Outliner';
 import { findNode } from './utils/treeUtils';
 import { navigateLeft, navigateRight, navigateVertical } from './utils/treeNavigation';
 import { StickyNote } from 'lucide-react';
+import AppIcon from '../build/icon-v3.png';
+import './focus-interface.css';
 import { useI18n } from './context/I18nContext';
 
 interface NotePopoverProps {
@@ -153,7 +154,7 @@ const NotePopover: React.FC<NotePopoverProps> = ({ nodeId, initialNote, onSave, 
   );
 };
 
-export default function App() {
+function Editor({ directory, onChangeWorkspace }: { directory: string; onChangeWorkspace: () => Promise<void> }) {
   const { t } = useI18n();
   const {
     tree,
@@ -161,7 +162,6 @@ export default function App() {
     editingId,
     transform,
     theme,
-    user,
     history,
     mapsList,
     activeMapId,
@@ -181,21 +181,16 @@ export default function App() {
     toggleCollapse,
     importTree,
     centerCanvas,
-    loginWithGoogle,
-    logout,
     switchMap,
     createNewMap,
     deleteMap,
     renameMap,
+    duplicateMap,
     updateNodeOffsetSilent,
     commitTreeState,
     createFloatingNode,
     reparentNode,
     reorderNode,
-    isOutlinerMode,
-    setIsOutlinerMode,
-    indentNodeSelected,
-    outdentNodeSelected,
     isAutoLayout,
     toggleAutoLayout,
     connectingSourceId,
@@ -212,10 +207,18 @@ export default function App() {
     createFolder,
     renameFolder,
     deleteFolder,
-    toggleFolderCollapse,
     moveMapToFolder,
-    isGoogleDriveConfigured
+    storageError,
+    copySelectedBranch,
+    pasteSelectedBranch,
+    clipboardMessage,
+    hasActiveMap,
+    isMapsListLoaded
   } = useMindMap();
+
+  const [selectedGroup, setSelectedGroup] = useState('default');
+  const groupHasActiveMap = (mapFolderMap[activeMapId] || 'default') === selectedGroup;
+  const [inspectorOpen, setInspectorOpen] = useState(false);
 
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [selectedRelId, setSelectedRelId] = useState<string | null>(null);
@@ -224,7 +227,7 @@ export default function App() {
 
   // Global UI Application Theme (Light / Dark)
   const [uiTheme, setUiTheme] = useState<'light' | 'dark'>(() => {
-    return (localStorage.getItem('mindsprout_ui_theme') as 'light' | 'dark') || 'dark';
+    return (localStorage.getItem('mindsprout_ui_theme') as 'light' | 'dark') || 'light';
   });
   const toggleUiTheme = () => {
     setUiTheme((prev) => {
@@ -389,6 +392,19 @@ export default function App() {
     }));
   };
 
+  useEffect(() => {
+    const handleClipboard = (event: KeyboardEvent) => {
+      if (!hasActiveMap || editingId || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      const target = event.target as HTMLElement;
+      if (target.isContentEditable || target.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const key = event.key.toLowerCase();
+      if (key === 'c' && selectedId) { event.preventDefault(); void copySelectedBranch(); }
+      if (key === 'v') { event.preventDefault(); void pasteSelectedBranch(); }
+    };
+    document.addEventListener('keydown', handleClipboard);
+    return () => document.removeEventListener('keydown', handleClipboard);
+  }, [hasActiveMap, editingId, selectedId, copySelectedBranch, pasteSelectedBranch]);
+
   // --- Keyboard Shortcuts ---
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // If typing in any input, textarea, or if editingId is active, ignore global keys
@@ -472,23 +488,24 @@ export default function App() {
 
   // UI Theme styling values
   const uiStyles = uiTheme === 'light' ? {
-    textColor: '#1e293b', // slate-800
-    glassBackground: 'rgba(255, 255, 255, 0.98)', // Opaque white glass
+    textColor: '#1e3228', // slate-800
+    glassBackground: '#ffffff', // Opaque white glass
     glassBorder: 'rgba(15, 23, 42, 0.08)',
-    panelShadow: '0 8px 32px 0 rgba(15, 23, 42, 0.08)',
-    uiAccentColor: '#2563eb' // Fixed accent color for Light UI
+    panelShadow: '0 6px 22px #173c3109',
+    uiAccentColor: '#287356' // Fixed accent color for Light UI
   } : {
-    textColor: '#f8fafc', // slate-50
-    glassBackground: 'rgba(15, 23, 42, 0.98)', // Opaque dark slate glass
+    textColor: '#edf5ef', // slate-50
+    glassBackground: '#1d3028', // Opaque dark slate glass
     glassBorder: 'rgba(255, 255, 255, 0.08)',
     panelShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.25)',
-    uiAccentColor: '#38bdf8' // Fixed accent color for Dark UI
+    uiAccentColor: '#a2d1b5' // Fixed accent color for Dark UI
   };
 
   // Build root inline theme styles mapping CSS Variables
   const appStyles: any = {
     // Canvas background
     '--theme-background': theme.background,
+    '--focus-canvas-ink': theme.textColor,
     
     // Root Node defaults
     '--theme-root-background': theme.rootBackground,
@@ -534,27 +551,14 @@ export default function App() {
   const rootNode = tree.children.find((c) => c.id === 'root');
   const isTimelineMode = rootNode?.style?.structure === 'timeline';
 
-  const isHandDrawn = rootNode?.style?.handDrawn || false;
 
   return (
-    <div className={`mindmap-app ${isHandDrawn ? 'hand-drawn-active' : ''}`} style={appStyles}>
-      {/* 1. Main Work Area (Canvas or Outliner) */}
-      {isOutlinerMode ? (
-        <Outliner
-          tree={tree}
-          selectedId={selectedId}
-          theme={theme}
-          setSelectedId={setSelectedId}
-          updateNodeText={updateNodeText}
-          addNodeSibling={addNodeSibling}
-          deleteNodeSelected={deleteNodeSelected}
-          indentNodeSelected={indentNodeSelected}
-          outdentNodeSelected={outdentNodeSelected}
-        />
-      ) : (
+    <div className={`mindmap-app focus-interface ${uiTheme==='dark'?'focus-dark':''} ${inspectorOpen ? 'focus-inspector-open' : ''}`} style={appStyles}>
+      {/* Main mind map canvas */}
         <div
           ref={canvasRef}
           className="canvas-container"
+          style={{visibility: groupHasActiveMap ? 'visible' : 'hidden'}}
           tabIndex={0}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
@@ -616,7 +620,6 @@ export default function App() {
             </div>
           </div>
         </div>
-      )}
 
       {/* Floating relationship connection helper banner */}
       {connectingSourceId && (
@@ -665,40 +668,40 @@ export default function App() {
       )}
 
       {/* 2. Floating Panels */}
-      {/* Left Sidebar: MindMap Document List */}
-      <MapListSidebar
-        mapsList={mapsList}
-        activeMapId={activeMapId}
-        onSwitchMap={switchMap}
-        onCreateNewMap={createNewMap}
-        onDeleteMap={deleteMap}
-        onRenameMap={renameMap}
-        onReorderMaps={reorderMapsList}
-        folders={folders}
-        mapFolderMap={mapFolderMap}
-        onCreateFolder={createFolder}
-        onRenameFolder={renameFolder}
-        onDeleteFolder={deleteFolder}
-        onToggleFolderCollapse={toggleFolderCollapse}
-        onMoveMapToFolder={moveMapToFolder}
-        isGoogleDriveConfigured={isGoogleDriveConfigured}
-        user={user}
-        syncStatus={syncStatus}
-        onLogin={loginWithGoogle}
-        onLogout={logout}
-      />
-
+      {storageError && <div role="alert" className="workspace-error">{storageError}<button onClick={() => void saveMapData(tree, true)}>重試儲存</button><button onClick={async () => {
+        const title = tree.children?.[0]?.text || tree.text;
+        try { if (await window.electronAPI!.saveCopy(title, tree)) alert('副本已儲存。'); }
+        catch (error) { alert(String(error)); }
+      }}>另存副本</button><button onClick={async () => {
+        if (!confirm('重新載入會放棄目前未儲存的變更，確定繼續？')) return;
+        try {
+          const result = await window.electronAPI!.refreshWorkspace();
+          if (result.warnings.length) alert(result.warnings.join('\n'));
+          window.onbeforeunload = null;
+          location.reload();
+        } catch (error) { alert(String(error)); }
+      }}>重新載入</button></div>}
+      {(!hasActiveMap || !groupHasActiveMap) && <div className="workspace-empty"><div><img src={AppIcon} alt=""/><h2>{isMapsListLoaded?t('emptyCanvasTitle'):t('loadingMaps')}</h2><p>{t('emptyCanvasHint')}</p><button className="focus-add-button" disabled={!isMapsListLoaded} onClick={()=>void createNewMap(undefined, selectedGroup)}>{t('newMap')}</button></div></div>}
+      {clipboardMessage && <div className="clipboard-message" role="status">{clipboardMessage}</div>}
       {/* Top Toolbar */}
       <Toolbar
-        selectedId={selectedId}
-        canUndo={history.past.length > 0}
-        canRedo={history.future.length > 0}
+        navigation={<><img src={AppIcon} alt="MindSprouts" className="header-app-icon"/><MapTabs maps={mapsList} folders={folders} assignments={mapFolderMap} activeId={activeMapId} ready={isMapsListLoaded} onSwitch={switchMap} onCreate={createNewMap} onRename={renameMap} onDelete={deleteMap} onDuplicate={duplicateMap} onMove={moveMapToFolder} onCreateGroup={createFolder} onRenameGroup={renameFolder} onDeleteGroup={deleteFolder} onReorder={reorderMapsList} onGroupChange={setSelectedGroup}/></>}
+        inspectorOpen={inspectorOpen}
+        onToggleInspector={() => setInspectorOpen(v => !v)}
+        directory={directory}
+        onChangeWorkspace={async () => { if (await saveMapData(tree, true)) await onChangeWorkspace(); }}
+        zoom={transform.zoom}
+        selectedId={groupHasActiveMap ? selectedId : null}
+        canUndo={groupHasActiveMap && history.past.length > 0}
+        canRedo={groupHasActiveMap && history.future.length > 0}
         tree={tree}
-        isOutlinerMode={isOutlinerMode}
-        onToggleOutlinerMode={setIsOutlinerMode}
         onAddChild={addNodeChild}
         onAddSibling={addNodeSibling}
         onDeleteSelected={deleteNodeSelected}
+        onCopy={copySelectedBranch}
+        onPaste={pasteSelectedBranch}
+        canCopy={hasActiveMap && groupHasActiveMap && !!selectedId}
+        canPaste={hasActiveMap && groupHasActiveMap}
         onUndo={undo}
         onRedo={redo}
         onZoomIn={handleZoomIn}
@@ -714,13 +717,15 @@ export default function App() {
         onToggleUiTheme={toggleUiTheme}
         syncStatus={syncStatus}
         onSave={() => saveMapData(tree, true)}
-        isConnected={user !== null}
+        isConnected={true}
       />
 
       {/* Right Inspector Sidebar */}
       <Inspector
+        isOpen={inspectorOpen}
+        onClose={()=>setInspectorOpen(false)}
         selectedId={selectedId}
-        selectedNode={selectedNodeDetail}
+        selectedNode={groupHasActiveMap ? selectedNodeDetail : null}
         tree={tree}
         theme={theme}
         isAutoLayout={isAutoLayout}
@@ -748,15 +753,34 @@ export default function App() {
           onClose={() => setActiveNoteNodeId(null)}
         />
       )}
-      {/* Hand-drawn SVG displacement filter for Excalidraw-like sketching */}
-      <svg style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }}>
-        <defs>
-          <filter id="hand-drawn-filter" filterUnits="userSpaceOnUse" x="-5000" y="-5000" width="10000" height="10000">
-            <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves={1} result="noise" />
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G" />
-          </filter>
-        </defs>
-      </svg>
     </div>
   );
+}
+
+export default function App() {
+  const [directory, setDirectory] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!window.electronAPI) { setError('請使用 MindSprouts 桌面程式開啟。'); return; }
+    window.electronAPI.getWorkspace().then(info => {
+      setDirectory(info.directory);
+      if (info.warnings.length) setError(info.warnings.join('\n'));
+    }).catch(e => setError(String(e)));
+  }, []);
+  const select = async () => {
+    setBusy(true);
+    try {
+      const info = await window.electronAPI!.selectWorkspace();
+      if (info) { setDirectory(info.directory); setRevision(v => v + 1); setError(info.warnings.join('\n')); }
+    } catch (e) { setError(String(e)); }
+    finally { setBusy(false); }
+  };
+  return <>
+    {error && <div role="alert" className="workspace-error">{error}<button onClick={() => setError('')}>關閉</button></div>}
+    {directory ? <Editor key={directory + revision} directory={directory} onChangeWorkspace={select} /> :
+      <div className="workspace-start"><h1>MindSprouts</h1><p>選擇儲存心智圖的工作目錄，開始使用。</p>
+      <button className="btn-primary" disabled={busy || !window.electronAPI} onClick={select}>選擇工作目錄</button></div>}
+  </>;
 }

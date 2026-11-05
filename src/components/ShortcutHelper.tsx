@@ -21,6 +21,8 @@ export const ShortcutHelper: React.FC<ShortcutHelperProps> = ({
     { keys: ['Space', t('shortcutOrDblClick')], description: t('shortcutF2') },
     { keys: ['Delete', 'Backspace'], description: t('shortcutDel') },
     { keys: ['↑', '↓', '←', '→'], description: t('shortcutMove') },
+    { keys: ['Ctrl', 'C'], description: t('copyBranch') },
+    { keys: ['Ctrl', 'V'], description: t('pasteBranch') },
     { keys: ['Ctrl', 'Z'], description: t('shortcutCtrlZ') },
     { keys: ['Ctrl', 'Y'], description: t('shortcutCtrlY') },
     { keys: [t('shortcutLeftDrag')], description: t('shortcutDrag') },

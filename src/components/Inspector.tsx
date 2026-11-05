@@ -1,11 +1,15 @@
+import { FLAG_MARKERS, PERSON_MARKERS, SYMBOL_MARKERS, NodeMarker } from './NodeMarker';
+import { FILL_STYLES, nodeFillImage } from '../utils/nodeFill';
 import React, { useState, useEffect } from 'react';
 import type { MindMapNode, MindMapTheme } from '../types/mindmap';
 import { THEMES } from '../utils/themes';
-import { Flag, Star, Heart, HelpCircle, Info, Sliders, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Flag, Sliders, Settings, X, Bold, Strikethrough, ChevronDown, Keyboard } from 'lucide-react';
 import { findParent } from '../utils/treeUtils';
 import { useI18n } from '../context/I18nContext';
 
 interface InspectorProps {
+  isOpen: boolean;
+  onClose: () => void;
   selectedId: string | null;
   selectedNode: MindMapNode | null;
   tree: MindMapNode;
@@ -18,6 +22,14 @@ interface InspectorProps {
   onChangeTheme: (theme: MindMapTheme) => void;
 }
 
+
+const FOCUS_NODE_PALETTES = [
+  { label: 'colorEmerald', fill: '#edf6ef', border: '#c8dfcf', text: '#365d45', swatch: '#8dbd9e' },
+  { label: 'colorIndigo', fill: '#f0f4fa', border: '#d8e1ed', text: '#3e587a', swatch: '#91aaca' },
+  { label: 'colorAmber', fill: '#faf3eb', border: '#eedecf', text: '#77543b', swatch: '#d8b493' },
+  { label: 'colorViolet', fill: '#f6f0fa', border: '#e4d9ed', text: '#694d7d', swatch: '#b89acb' },
+  { label: 'colorSlate', fill: '#f0f3f4', border: '#dbe2e3', text: '#455c65', swatch: '#91a4aa' },
+];
 
 const PRES_BOUNDARY_COLORS = [
   { key: 'colorIndigo', fill: 'rgba(99, 102, 241, 0.05)', border: '#6366f1' },
@@ -72,6 +84,7 @@ const getNodeSide = (rootNode: MindMapNode, targetId: string): 'left' | 'right' 
 };
 
 export const Inspector: React.FC<InspectorProps> = ({
+  isOpen, onClose,
   selectedId,
   selectedNode,
   tree,
@@ -84,10 +97,52 @@ export const Inspector: React.FC<InspectorProps> = ({
   onChangeTheme
 }) => {
   const { t } = useI18n();
+  const nodePalettes = theme.id === 'focus-mint' ? FOCUS_NODE_PALETTES :
+    (theme.branchColors?.length ? theme.branchColors : theme.levelBackgrounds || [theme.nodeDefaultBackground]).map((fill, index) => {
+      // Choose the more legible text color for each theme swatch.
+      const channels = fill.replace('#', '').match(/.{2}/g)?.map(value => {
+        const channel = parseInt(value, 16) / 255;
+        return channel <= 0.04045 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
+      }) || [1, 1, 1];
+      const luminance = channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+      return { label: String(index + 1), fill, border: fill, text: luminance > 0.179 ? '#1a1a1a' : '#ffffff', swatch: fill };
+    });
+
   const rootNode = tree.children.find((c) => c.id === 'root');
   const isTimelineMode = rootNode?.style?.structure === 'timeline';
-  const [activeTab, setActiveTab] = React.useState<'node' | 'map'>('node');
-  const [isOpen, setIsOpen] = useState(true);
+  const [activeTab, setActiveTab] = React.useState<'node' | 'markers' | 'map'>('node');
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const themePickerRef = React.useRef<HTMLDivElement>(null);
+  const themeName = (item: MindMapTheme) => {
+    const key = 'theme_' + item.id.split('-')[0];
+    return t(key) !== key ? t(key) : item.name;
+  };
+  const themeSwatches = (item: MindMapTheme) => (
+    <span className="theme-color-strip" aria-hidden="true">
+      {[item.rootBackground, ...(item.branchColors || [item.nodeDefaultBackground])].map((color, index) =>
+        <i key={index} style={{ backgroundColor: color }} />)}
+    </span>
+  );
+  useEffect(() => { setThemePickerOpen(false); }, [isOpen, activeTab, tree.id]);
+  useEffect(() => {
+    if (!themePickerOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!themePickerRef.current?.contains(event.target as Node)) setThemePickerOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setThemePickerOpen(false);
+        themePickerRef.current?.querySelector('button')?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [themePickerOpen]);
+
 
   const renderProgressIconSvg = (progress: number) => {
     const radius = 3;
@@ -96,7 +151,7 @@ export const Inspector: React.FC<InspectorProps> = ({
 
     if (progress === 100) {
       return (
-        <svg width="14" height="14" viewBox="0 0 16 16" style={{ display: 'block' }}>
+        <svg width="16" height="16" viewBox="0 0 16 16" style={{ display: 'block' }}>
           <circle cx="8" cy="8" r="7" fill="#10b981" />
           <path
             d="M5 8 l2 2 l4 -4"
@@ -111,7 +166,7 @@ export const Inspector: React.FC<InspectorProps> = ({
     }
 
     return (
-      <svg width="14" height="14" viewBox="0 0 16 16" style={{ display: 'block' }}>
+      <svg width="16" height="16" viewBox="0 0 16 16" style={{ display: 'block' }}>
         <circle cx="8" cy="8" r="6" fill="#ffffff" stroke="#10b981" strokeWidth="1.5" />
         {progress > 0 && (
           <circle
@@ -215,6 +270,7 @@ export const Inspector: React.FC<InspectorProps> = ({
   }, [theme]);
 
   const [activePicker, setActivePicker] = useState<'text' | 'bg' | 'border' | null>(null);
+  useEffect(() => { setActivePicker(null); }, [selectedId, isOpen, activeTab]);
 
   // Close color picker when selecting another node
   useEffect(() => {
@@ -235,16 +291,6 @@ export const Inspector: React.FC<InspectorProps> = ({
     if (!selectedId) return;
     const val = e.target.value;
     onUpdateStyle(selectedId, { structure: val ? (val as any) : undefined });
-  };
-
-  const handleFontSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    if (!selectedId) return;
-    onUpdateStyle(selectedId, { fontSize: e.target.value });
-  };
-
-  const handleFontWeightChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    if (!selectedId) return;
-    onUpdateStyle(selectedId, { fontWeight: e.target.value });
   };
 
   const handleColorSelect = (color: string | undefined) => {
@@ -497,7 +543,6 @@ export const Inspector: React.FC<InspectorProps> = ({
   const currentLineStyle = selectedNode?.style?.lineStyle || 'curve';
   const currentStructure = selectedNode?.style?.structure || '';
   const selectedNodeSide = selectedNode && selectedId ? getNodeSide(tree, selectedId) : 'right';
-  const currentFontSize = selectedNode?.style?.fontSize || (selectedId === 'root' ? '18px' : '14px');
   const currentFontWeight = selectedNode?.style?.fontWeight || (selectedId === 'root' ? '700' : '500');
   const currentColor = selectedNode?.style?.color || '';
   const currentBg = selectedNode?.style?.backgroundColor || '';
@@ -505,42 +550,19 @@ export const Inspector: React.FC<InspectorProps> = ({
 
   return (
     <>
-      {/* Toggle Button */}
-      <button
-        className="inspector-toggle-btn glass-panel"
-        onClick={() => setIsOpen(!isOpen)}
-        style={{
-          position: 'fixed',
-          right: isOpen ? '348px' : '24px',
-          top: '24px',
-          zIndex: 110,
-          background: 'var(--theme-glass-background)',
-          border: '1px solid var(--theme-glass-border)',
-          color: 'var(--theme-text-color)',
-          width: '32px',
-          height: '32px',
-          borderRadius: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-        }}
-        title={isOpen ? '收合節點設定' : '展開節點設定'}
-      >
-        {isOpen ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-      </button>
-
       <div 
         className="inspector-panel glass-panel"
+        inert={!isOpen}
+        data-open={isOpen}
+        aria-label={t('properties')}
         style={{
           transform: isOpen ? 'translateX(0)' : 'translateX(360px)',
           opacity: isOpen ? 1 : 0,
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
         }}
       >
-      {activePicker && (
+      <div className="focus-panel-heading"><strong>{t('properties')}</strong><button className="focus-icon-button" onClick={onClose} aria-label={t('closeSettings')}><X size={17}/></button></div>
+      {isOpen && activePicker && (
         <div 
           style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }} 
           onClick={() => setActivePicker(null)} 
@@ -553,42 +575,48 @@ export const Inspector: React.FC<InspectorProps> = ({
           onClick={() => setActiveTab('node')}
         >
           <Sliders size={14} className="tab-icon" />
-          <span>{t('properties')}</span>
+          <span>{t('inspectorStyle')}</span>
+        </button>
+        <button className={`inspector-tab-btn ${activeTab === 'markers' ? 'active' : ''}`} onClick={() => setActiveTab('markers')}>
+          <Flag size={14} className="tab-icon" />
+          <span>{t('inspectorMarkers')}</span>
         </button>
         <button
           className={`inspector-tab-btn ${activeTab === 'map' ? 'active' : ''}`}
           onClick={() => setActiveTab('map')}
         >
           <Settings size={14} className="tab-icon" />
-          <span>{t('mindmapConfig')}</span>
+          <span>{t('inspectorMap')}</span>
         </button>
       </div>
 
       {/* 1. Workspace Theme */}
       {activeTab === 'map' && (
         <div className="inspector-section">
-          <div className="inspector-title">{t('mindmapConfig')}</div>
+          <div className="inspector-title">{t('inspectorMap')}</div>
           
-          <div className="inspector-row">
+          <div className="theme-picker" ref={themePickerRef}>
             <span className="inspector-label">{t('themeSelect')}</span>
-            <select
-              className="inspector-select"
-              value={theme.id}
-              onChange={(e) => {
-                const selected = THEMES.find((t) => t.id === e.target.value);
-                if (selected) onChangeTheme(selected);
-              }}
-            >
-              {THEMES.map((themeItem) => (
-                <option key={themeItem.id} value={themeItem.id}>
-                  {t('theme_' + themeItem.id.split('-')[0]) !== 'theme_' + themeItem.id.split('-')[0]
-                    ? t('theme_' + themeItem.id.split('-')[0])
-                    : themeItem.name}
-                </option>
-              ))}
-            </select>
+            <button type="button" className="theme-picker-trigger" aria-expanded={themePickerOpen} aria-controls="theme-picker-options" onClick={() => setThemePickerOpen(open => !open)}>
+              {themeSwatches(theme)}
+              <span>{themeName(theme)}</span>
+              <ChevronDown size={16} />
+            </button>
+            {themePickerOpen && (
+              <div id="theme-picker-options" className="compact-theme-previews" role="group" aria-label={t('themeSelect')}>
+                {THEMES.map(item => (
+                  <button type="button" key={item.id} data-theme-id={item.id} aria-pressed={theme.id === item.id} className={theme.id === item.id ? 'active' : ''} onClick={() => {
+                    onChangeTheme(item);
+                    setThemePickerOpen(false);
+                    themePickerRef.current?.querySelector('button')?.focus();
+                  }}>
+                    <span>{themeName(item)}</span>
+                    {themeSwatches(item)}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-
           <div className="inspector-row" style={{ marginTop: '8px' }}>
             <span className="inspector-label">{t('mapLayout')}</span>
             <select
@@ -608,18 +636,6 @@ export const Inspector: React.FC<InspectorProps> = ({
           </div>
 
           <div className="inspector-row" style={{ marginTop: '8px' }}>
-            <span className="inspector-label">{t('handDrawnMode')}</span>
-            <select
-              className="inspector-select"
-              value={tree.children.find((c) => c.id === 'root')?.style?.handDrawn ? 'true' : 'false'}
-              onChange={(e) => onUpdateStyle('root', { handDrawn: e.target.value === 'true' } as any)}
-            >
-              <option value="false">{t('handDrawnDisabled')}</option>
-              <option value="true">{t('handDrawnEnabled')}</option>
-            </select>
-          </div>
-
-          <div className="inspector-row" style={{ marginTop: '8px' }}>
             <span className="inspector-label">{t('autoLayout')}</span>
             <label className="toggle-switch">
               <input
@@ -633,12 +649,125 @@ export const Inspector: React.FC<InspectorProps> = ({
         </div>
       )}
 
+      {activeTab === 'markers' && (
+        <div className="inspector-section">
+          {selectedNode ? <>
+            <section className="marker-category">
+              <h3>{t('priority')}</h3>
+              <div className="marker-picker-grid">
+                {[1,2,3,4,5,6,7,8,9].map(priority => <button type="button" key={priority} className="flag-btn" aria-label={`${t('priority')} ${priority}`} title={`${t('priority')} ${priority}`} aria-pressed={selectedNode.priority === priority} onClick={() => onUpdateData(selectedNode.id, {priority})}><span className={`node-badge-priority priority-${priority}`}>{priority}</span></button>)}
+                <button type="button" className="marker-clear-btn" aria-label={t('clearPriority')} title={t('clearPriority')} disabled={!selectedNode.priority} onClick={() => onUpdateData(selectedNode.id, {priority:undefined})}><X size={14}/></button>
+              </div>
+            </section>
+            <section className="marker-category">
+              <h3>{t('taskProgress')}</h3>
+              <div className="marker-picker-grid">
+                {[0,25,50,75,100].map(progress => <button type="button" key={progress} className="flag-btn" aria-label={`${t('taskProgress')} ${progress}%`} title={`${progress}%`} aria-pressed={selectedNode.progress === progress} onClick={() => onUpdateData(selectedNode.id, {progress})}><span className="node-badge-progress">{renderProgressIconSvg(progress)}</span></button>)}
+                <button type="button" className="marker-clear-btn" aria-label={t('clearProgress')} title={t('clearProgress')} disabled={selectedNode.progress === undefined} onClick={() => onUpdateData(selectedNode.id, {progress:undefined})}><X size={14}/></button>
+              </div>
+            </section>
+            {[ 
+              {label:'markersAndFlags', markers:FLAG_MARKERS},
+              {label:'markerPeople', markers:PERSON_MARKERS},
+              {label:'markerSymbols', markers:SYMBOL_MARKERS},
+            ].map(group => <section className="marker-category" key={group.label}>
+              <h3>{t(group.label)}</h3>
+              <div className="marker-picker-grid">
+                {group.markers.map(marker => <button type="button" key={marker.id} className="flag-btn" data-marker-id={marker.id} aria-label={t(marker.label)} title={t(marker.label)} aria-pressed={selectedNode.flag === marker.id} onClick={() => onUpdateData(selectedNode.id, {flag: marker.id})}>
+                  <NodeMarker id={marker.id} t={t}/>
+                </button>)}
+                <button type="button" className="marker-clear-btn" aria-label={`${t('clearMarker')}: ${t(group.label)}`} title={`${t('clearMarker')}: ${t(group.label)}`} disabled={!group.markers.some(marker => marker.id === selectedNode.flag)} onClick={() => onUpdateData(selectedNode.id, {flag: undefined})}><X size={14}/></button>
+              </div>
+            </section>)}
+
+            <div className="inspector-row">
+              <span className="inspector-label">{t('customTags')}</span>
+              <input
+                type="text"
+                className="inspector-input"
+                placeholder={t("tagsPlaceholder")}
+                value={selectedNode.labels ? selectedNode.labels.join(', ') : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const labels = val ? val.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
+                  onUpdateData(selectedNode.id, { labels });
+                }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid var(--theme-glass-border)',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  color: 'var(--theme-text-color)',
+                  fontSize: '12px',
+                  width: '60%',
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+
+
+            <section className="compact-property-section compact-note-section">
+              <h3><label htmlFor="compact-topic-note">{t('topicNote')}</label><small>{t('noteHint')}</small></h3>
+              <textarea id="compact-topic-note" aria-label={t('topicNote')} placeholder={t('compactNotePlaceholder')} value={selectedNode.note || ''}
+                onChange={event => onUpdateData(selectedNode.id, {note: event.target.value})}/>
+            </section>
+          </> : <div className="inspector-empty-selection">{t('selectNodePrompt')}</div>}
+        </div>
+      )}
+
       {/* 2. Selected Node Styles */}
       {activeTab === 'node' && (
         <div className="inspector-section" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-          <div className="inspector-title">{t('nodeStyleSettings')}</div>
         {selectedNode ? (
           <>
+            <section className="compact-property-section">
+              <h3>{t('textStyle')}</h3>
+              <div className="compact-type-toolbar">
+                <button type="button" className={Number(currentFontWeight) >= 600 ? 'active' : ''} aria-pressed={Number(currentFontWeight) >= 600} aria-label={t('weightBold')}
+                  onClick={() => onUpdateStyle(selectedNode.id, { fontWeight: Number(currentFontWeight) >= 600 ? '500' : '700' })}><Bold size={17}/></button>
+                <label className={`compact-strike-toggle ${selectedNode.style?.strikethrough ? 'active' : ''}`} title={t('strikethrough')}>
+                  <input id="node-strikethrough" type="checkbox" aria-label={t('strikethrough')} checked={selectedNode.style?.strikethrough ?? false}
+                    onChange={event => onUpdateStyle(selectedNode.id, { strikethrough: event.target.checked })}/>
+                  <Strikethrough size={17}/>
+                </label>
+                <select aria-label={t('fontSize')} value={selectedNode.style?.fontSize || ''} onChange={event => onUpdateStyle(selectedNode.id, { fontSize: event.target.value || undefined })}>
+                  <option value="">{t('autoFontSize')}</option>
+                  {[12,14,16,18,22].map(size => <option key={size} value={`${size}px`}>{size} px</option>)}
+                </select>
+                <button type="button" className={`compact-text-color ${activePicker === 'text' ? 'active' : ''}`} aria-label={t('textColor')} title={t('textColor')} aria-expanded={activePicker === 'text'} onClick={() => setActivePicker(activePicker === 'text' ? null : 'text')}>
+                  <span aria-hidden="true">A</span>
+                  <i aria-hidden="true" style={{backgroundColor: currentColor || (selectedId === 'root' ? theme.rootColor : theme.nodeDefaultColor)}} />
+                </button>
+                {activePicker === 'text' && renderColorPickerDropdown('text', currentColor, handleColorSelect)}
+              </div>
+            </section>
+            <section className="compact-property-section">
+              <div className="compact-section-heading"><h3>{t('nodePalette')}</h3><button type="button" className="compact-reset" onClick={() => onUpdateStyle(selectedNode.id, {backgroundColor: undefined, borderColor: undefined, color: undefined})}>{t('restoreDefault')}</button></div>
+              <div className="compact-palette-row">
+                {nodePalettes.map(palette => <button key={palette.fill} type="button" aria-label={`${t('nodePalette')}: ${t(palette.label)}`} title={t(palette.label)} aria-pressed={selectedNode.style?.backgroundColor === palette.fill}
+                  className={`compact-palette ${selectedNode.style?.backgroundColor === palette.fill ? 'active' : ''}`} style={{backgroundColor: palette.swatch}}
+                  onClick={() => onUpdateStyle(selectedNode.id, {backgroundColor: palette.fill, borderColor: palette.border, color: palette.text})}/>) }
+              </div>
+            </section>
+            <details open className="compact-advanced" onToggle={event => { if (!event.currentTarget.open) setActivePicker(null); }}>
+              <summary>{t('advancedAppearance')}<ChevronDown size={15}/></summary>
+              <div className="compact-advanced-body">
+
+            <div className="inspector-row">
+              <span className="inspector-label">{t('fillStyle')}</span>
+              <details className="fill-style-picker">
+                <summary><span className="fill-style-swatch" style={{backgroundColor: selectedNode.style?.fillStyle === 'none' ? 'transparent' : '#374b40', backgroundImage: nodeFillImage(selectedNode.style?.fillStyle, '#374b40')}}/><span>{t('fill_' + (selectedNode.style?.fillStyle || 'solid'))}</span><ChevronDown size={14}/></summary>
+                <div className="fill-style-options">
+                  {FILL_STYLES.map(style => <button type="button" key={style} title={t('fill_' + style)} aria-label={t('fill_' + style)} aria-pressed={(selectedNode.style?.fillStyle || 'solid') === style} data-fill-style={style} onClick={event => {
+                    onUpdateStyle(selectedNode.id, {fillStyle: style});
+                    const picker = event.currentTarget.closest('details');
+                    if (picker) { picker.open = false; picker.querySelector('summary')?.focus(); }
+                  }}><span className="fill-style-swatch" style={{backgroundColor: style === 'none' ? 'transparent' : '#374b40', backgroundImage: nodeFillImage(style, '#374b40')}}/><span>{t('fill_' + style)}</span></button>)}
+                </div>
+              </details>
+            </div>
+
             <div className="inspector-row">
               <span className="inspector-label">{t('shape')}</span>
               <select
@@ -750,65 +879,6 @@ export const Inspector: React.FC<InspectorProps> = ({
               </div>
             )}
 
-            <div className="inspector-row">
-              <span className="inspector-label">{t('fontSize')}</span>
-              <select
-                className="inspector-select"
-                value={currentFontSize}
-                onChange={handleFontSizeChange}
-              >
-                <option value="12px">{t('fontSmall')} (12px)</option>
-                <option value="14px">{t('fontMedium')} (14px)</option>
-                <option value="16px">{t('fontLarge')} (16px)</option>
-                <option value="18px">{t('fontXLarge')} (18px)</option>
-                <option value="22px">{t('fontXXLarge')} (22px)</option>
-              </select>
-            </div>
-
-            <div className="inspector-row">
-              <span className="inspector-label">{t('fontWeight')}</span>
-              <select
-                className="inspector-select"
-                value={currentFontWeight}
-                onChange={handleFontWeightChange}
-              >
-                <option value="300">{t('weightLight')} (Light)</option>
-                <option value="500">{t('weightRegular')} (Regular)</option>
-                <option value="700">{t('weightBold')} (Bold)</option>
-              </select>
-            </div>
-
-            <div className="inspector-row" style={{ position: 'relative' }}>
-              <span className="inspector-label">{t('textColor')}</span>
-              <div 
-                className="inspector-select" 
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '8px', 
-                  cursor: 'pointer',
-                  justifyContent: 'space-between',
-                  userSelect: 'none'
-                }}
-                onClick={() => setActivePicker(activePicker === 'text' ? null : 'text')}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div 
-                    style={{ 
-                      width: '16px', 
-                      height: '16px', 
-                      borderRadius: '4px', 
-                      backgroundColor: currentColor || 'currentColor',
-                      border: '1px solid var(--theme-glass-border)'
-                    }} 
-                  />
-                  <span style={{ fontSize: '12px' }}>{currentColor || t('default')}</span>
-                </div>
-                <span style={{ fontSize: '10px', opacity: 0.6 }}>▼</span>
-              </div>
-              {activePicker === 'text' && renderColorPickerDropdown('text', currentColor, handleColorSelect)}
-            </div>
-
             {currentShape !== 'underlined' && (
               <div className="inspector-row" style={{ position: 'relative' }}>
                 <span className="inspector-label">{t('fillColor')}</span>
@@ -881,10 +951,12 @@ export const Inspector: React.FC<InspectorProps> = ({
                 onClick={() => {
                   if (!selectedNode || !selectedId) return;
                   const styleToCopy = {
+                    fillStyle: selectedNode.style?.fillStyle,
                     shape: selectedNode.style?.shape,
                     structure: selectedNode.style?.structure,
                     fontSize: selectedNode.style?.fontSize,
                     fontWeight: selectedNode.style?.fontWeight,
+                    strikethrough: selectedNode.style?.strikethrough ?? false,
                     color: selectedNode.style?.color,
                     backgroundColor: selectedNode.style?.backgroundColor,
                     borderColor: selectedNode.style?.borderColor,
@@ -898,194 +970,11 @@ export const Inspector: React.FC<InspectorProps> = ({
               </button>
             </div>
 
-            {/* Badges, Labels, Notes Section */}
-            <div className="inspector-divider" style={{ margin: '20px 0 16px', borderTop: '1px dashed var(--theme-glass-border)' }} />
-            
-            <div className="inspector-title" style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.8 }}>{t('nodeNotesTitle')}</div>
-            
-            <div className="inspector-row-vertical">
-              <span className="inspector-label">{t('priority')}</span>
-              <div className="priority-grid">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    className={`priority-btn p-${p} ${selectedNode.priority === p ? 'active' : ''}`}
-                    onClick={() => onUpdateData(selectedNode.id, { priority: p })}
-                    title={`P${p}`}
-                  >
-                    {p}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  className="priority-clear-btn"
-                  onClick={() => onUpdateData(selectedNode.id, { priority: undefined })}
-                  title={t("clearPriority")}
-                >
-                  ✕
-                </button>
               </div>
-            </div>
-
-            <div className="inspector-row-vertical" style={{ marginTop: '14px' }}>
-              <span className="inspector-label">{t('taskProgress')}</span>
-              <div className="progress-grid">
-                {[0, 25, 50, 75, 100].map((progressValue) => (
-                  <button
-                    key={progressValue}
-                    type="button"
-                    className={`progress-btn ${selectedNode.progress === progressValue ? 'active' : ''}`}
-                    onClick={() => onUpdateData(selectedNode.id, { progress: progressValue })}
-                    title={`${progressValue}%`}
-                  >
-                    <span className="progress-btn-icon">
-                      {renderProgressIconSvg(progressValue)}
-                    </span>
-                    <span className="progress-btn-text">{progressValue}%</span>
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  className="progress-clear-btn"
-                  onClick={() => onUpdateData(selectedNode.id, { progress: undefined })}
-                  title={t("clearProgress")}
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            <div className="inspector-row-vertical" style={{ marginTop: '14px' }}>
-              <span className="inspector-label">{t('markersAndFlags')}</span>
-              <div className="flag-picker-grid">
-                {['red-flag', 'orange-flag', 'yellow-flag', 'green-flag', 'blue-flag', 'purple-flag', 'star', 'heart', 'question', 'info'].map((flagKey) => {
-                  const flagTitleMap: Record<string, string> = {
-                    'red-flag': t('flagRed'),
-                    'orange-flag': t('flagOrange'),
-                    'yellow-flag': t('flagYellow'),
-                    'green-flag': t('flagGreen'),
-                    'blue-flag': t('flagBlue'),
-                    'purple-flag': t('flagPurple'),
-                    'star': t('flagStar'),
-                    'heart': t('flagHeart'),
-                    'question': t('flagQuestion'),
-                    'info': t('flagInfo')
-                  };
-                  const renderFlagIconHelper = (key: string) => {
-                    const size = 14;
-                    switch (key) {
-                      case 'red-flag':
-                      case 'orange-flag':
-                      case 'yellow-flag':
-                      case 'green-flag':
-                      case 'blue-flag':
-                      case 'purple-flag':
-                        return <span className={`node-badge-flag flag-${key.split('-')[0]}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Flag size={size} fill="currentColor" /></span>;
-                      case 'star':
-                        return <span className="node-badge-flag flag-star" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Star size={size} fill="currentColor" /></span>;
-                      case 'heart':
-                        return <span className="node-badge-flag flag-heart" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Heart size={size} fill="currentColor" /></span>;
-                      case 'question':
-                        return <span className="node-badge-flag flag-question" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><HelpCircle size={size} /></span>;
-                      case 'info':
-                        return <span className="node-badge-flag flag-info" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Info size={size} /></span>;
-                      default:
-                        return null;
-                    }
-                  };
-                  return (
-                    <button
-                      key={flagKey}
-                      type="button"
-                      className={`flag-btn flag-${flagKey} ${selectedNode.flag === flagKey ? 'active' : ''}`}
-                      onClick={() => onUpdateData(selectedNode.id, { flag: selectedNode.flag === flagKey ? undefined : flagKey })}
-                      title={flagTitleMap[flagKey]}
-                    >
-                      {renderFlagIconHelper(flagKey)}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="inspector-row">
-              <span className="inspector-label">{t('customTags')}</span>
-              <input
-                type="text"
-                className="inspector-input"
-                placeholder={t("tagsPlaceholder")}
-                value={selectedNode.labels ? selectedNode.labels.join(', ') : ''}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const labels = val ? val.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
-                  onUpdateData(selectedNode.id, { labels });
-                }}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid var(--theme-glass-border)',
-                  borderRadius: '4px',
-                  padding: '4px 8px',
-                  color: 'var(--theme-text-color)',
-                  fontSize: '12px',
-                  width: '60%',
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-
-
-            <div className="inspector-divider" style={{ margin: '20px 0 16px', borderTop: '1px dashed var(--theme-glass-border)' }} />
-            
-            <div className="inspector-title" style={{ fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.8 }}>{t('hyperlinkMedia')}</div>
-
-            <div className="inspector-row-vertical" style={{ marginTop: '10px' }}>
-              <span className="inspector-label">{t('hyperlink')}</span>
-              <input
-                className="inspector-input"
-                type="text"
-                placeholder={t("linkPlaceholder")}
-                value={selectedNode.link || ''}
-                onChange={(e) => onUpdateData(selectedNode.id, { link: e.target.value || undefined })}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid var(--theme-glass-border)',
-                  borderRadius: '4px',
-                  padding: '4px 8px',
-                  color: 'var(--theme-text-color)',
-                  fontSize: '12px',
-                  width: '100%',
-                  outline: 'none',
-                  marginTop: '4px'
-                }}
-              />
-            </div>
-
-            <div className="inspector-row-vertical" style={{ marginTop: '12px' }}>
-              <span className="inspector-label">{t('embeddedImage')}</span>
-              <input
-                className="inspector-input"
-                type="text"
-                placeholder={t("imagePlaceholder")}
-                value={selectedNode.image || ''}
-                onChange={(e) => onUpdateData(selectedNode.id, { image: e.target.value || undefined })}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid var(--theme-glass-border)',
-                  borderRadius: '4px',
-                  padding: '4px 8px',
-                  color: 'var(--theme-text-color)',
-                  fontSize: '12px',
-                  width: '100%',
-                  outline: 'none',
-                  marginTop: '4px'
-                }}
-              />
-            </div>
-
-            <div className="inspector-divider" style={{ margin: '20px 0', borderTop: '1px solid var(--theme-glass-border)' }} />
-
+            </details>
+            <details className="compact-advanced" onToggle={event => { if (!event.currentTarget.open) setActivePicker(null); }}>
+              <summary>{t('boundaryTitle')}<ChevronDown size={15}/></summary>
+              <div className="compact-advanced-body">
             <div style={{ marginTop: '16px' }}>
               <div 
                 style={{ 
@@ -1248,6 +1137,9 @@ export const Inspector: React.FC<InspectorProps> = ({
                 </div>
               )}
             </div>
+              </div>
+            </details>
+            <div className="compact-keyboard-hint"><Keyboard size={17}/><span><kbd>Tab</kbd> {t('shortcutTab')}<br/><kbd>{t('shortcutOrDblClick').replace(/^或/, '').trim()}</kbd> {t('shortcutF2')}</span></div>
           </>
         ) : (
           <div style={{ fontSize: '13px', opacity: 0.5, textAlign: 'center', marginTop: '40px' }}>

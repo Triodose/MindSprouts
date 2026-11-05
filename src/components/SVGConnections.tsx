@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useRef } from 'react';
 import type { MindMapNode, BoundaryStyle } from '../types/mindmap';
 import { findParent } from '../utils/treeUtils';
 import { useI18n } from '../context/I18nContext';
@@ -144,7 +144,9 @@ export const SVGConnections: React.FC<SVGConnectionsProps> = ({
   const [boundaries, setBoundaries] = useState<BoundaryDrawData[]>([]);
   const containerRef = useRef<SVGSVGElement>(null);
 
-  useEffect(() => {
+  // Measure the committed node layout and update paths before painting. Root drag
+  // release transfers its offset to the canvas transform in the same commit.
+  useLayoutEffect(() => {
     const calculateConnections = () => {
       const svgElement = containerRef.current;
       if (!svgElement) return;

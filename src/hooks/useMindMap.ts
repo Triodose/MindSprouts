@@ -2,13 +2,11 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { MindMapNode, CanvasTransform, MindMapTheme, HistoryState } from '../types/mindmap';
 import { DEFAULT_THEME, THEMES } from '../utils/themes';
 import * as treeUtils from '../utils/treeUtils';
-import * as googleDriveClient from '../utils/googleDriveClient';
 import { useI18n } from '../context/I18nContext';
+import { copyBranch, readBranch, cloneBranch } from '../utils/nodeClipboard';
 import { storage } from '../services/storage';
 
-declare const google: any;
 
-const LOCAL_STORAGE_MAPS_KEY = 'mindsprout_local_maps';
 const LOCAL_STORAGE_ACTIVE_ID_KEY = 'mindsprout_active_map_id';
 
 export interface FolderItem {
@@ -21,12 +19,6 @@ export interface MindMapMetadata {
   id: string;
   title: string;
   updated_at: string;
-}
-
-export interface GoogleUserInfo {
-  name: string;
-  email: string;
-  avatar_url: string;
 }
 
 const migrateTree = (loadedTree: MindMapNode): MindMapNode => {
@@ -49,7 +41,7 @@ export const useMindMap = () => {
   const { t } = useI18n();
   // MindMaps List Metadata
   const [mapsList, setMapsList] = useState<MindMapMetadata[]>([]);
-  const [activeMapId, setActiveMapId] = useState<string>('default-map');
+  const [activeMapId, setActiveMapId] = useState<string>('');
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [mapFolderMap, setMapFolderMap] = useState<Record<string, string>>({});
 
@@ -65,8 +57,8 @@ export const useMindMap = () => {
           console.error('Failed to parse folders setting:', e);
         }
       }
-      if (!parsedFolders || parsedFolders.length === 0) {
-        parsedFolders = [{ id: 'default', name: t('myMindMaps'), isCollapsed: false }];
+      if (!parsedFolders.some(f => f.id === 'default')) {
+        parsedFolders = [{ id: 'default', name: t('myMindMaps'), isCollapsed: false }, ...parsedFolders];
       }
       setFolders(parsedFolders);
 
@@ -82,7 +74,7 @@ export const useMindMap = () => {
       setMapFolderMap(parsedMapFolders);
     };
 
-    loadFolderSettings();
+    void loadFolderSettings().catch(error => setStorageError(String(error)));
   }, [t]);
 
 
@@ -100,11 +92,12 @@ export const useMindMap = () => {
     )
   );
 
-  // Outliner Mode Toggle
-  const [isOutlinerMode, setIsOutlinerMode] = useState<boolean>(false);
 
   // Auto Layout / Snap alignment mode toggle (persisted to LocalStorage, defaults to true)
   const [isAutoLayout, setIsAutoLayout] = useState<boolean>(true);
+
+  const autoLayoutRef = useRef(isAutoLayout);
+  autoLayoutRef.current = isAutoLayout;
 
   // History for Undo/Redo
   const [history, setHistory] = useState<HistoryState>({
@@ -119,21 +112,7 @@ export const useMindMap = () => {
   const [connectingSourceId, setConnectingSourceId] = useState<string | null>(null);
 
   // Canvas Transform State (Zoom & Pan)
-  const [transform, setTransform] = useState<CanvasTransform>(() => {
-    const activeId = localStorage.getItem(LOCAL_STORAGE_ACTIVE_ID_KEY) || 'default-map';
-    const savedTransforms = localStorage.getItem('mindsprout_map_transforms');
-    if (savedTransforms) {
-      try {
-        const transforms = JSON.parse(savedTransforms);
-        if (transforms[activeId]) {
-          return transforms[activeId];
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return { x: 150, y: window.innerHeight / 2 - 40, zoom: 1 };
-  });
+  const [transform, setTransform] = useState<CanvasTransform>({x: 150, y: window.innerHeight / 2 - 40, zoom: 1});
 
   // Theme resolved dynamically from the root node (tree.themeId)
   const theme = useMemo(() => {
@@ -141,35 +120,22 @@ export const useMindMap = () => {
     return THEMES.find((t) => t.id === activeThemeId) || DEFAULT_THEME;
   }, [tree.themeId]);
 
-  // Google Drive & Identity Auth States
-  const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(null);
-  const [googleTokenExpiry, setGoogleTokenExpiry] = useState<number>(0);
-  const [googleUserInfo, setGoogleUserInfo] = useState<GoogleUserInfo | null>(() => {
-    const cached = localStorage.getItem('google_user_info');
-    return cached ? JSON.parse(cached) : null;
-  });
-  const [googleFolderId, setGoogleFolderId] = useState<string | null>(() => {
-    return localStorage.getItem('google_folder_id');
-  });
   const [syncStatus, setSyncStatus] = useState<'saved' | 'dirty' | 'syncing' | 'error'>('saved');
-  const [isMapsListLoaded, setIsMapsListLoaded] = useState<boolean>(false);
-  const isSyncing = syncStatus === 'syncing';
-  const setIsSyncing = useCallback((syncing: boolean) => {
-    setSyncStatus(syncing ? 'syncing' : 'saved');
-  }, []);
+  const [isMapsListLoaded, setIsMapsListLoaded] = useState(false);
+  const pendingSave = useRef<Promise<boolean>>(Promise.resolve(true));
+  const saveGeneration = useRef(0);
+  const savedTree = useRef<MindMapNode | null>(null);
+  const [storageError, setStorageError] = useState('');
+  const currentTreeRef = useRef(tree);
+  currentTreeRef.current = tree;
 
-  // Mock a user object to match previous Supabase user signature
-  const user = useMemo(() => {
-    return googleUserInfo 
-      ? { email: googleUserInfo.email, user_metadata: { avatar_url: googleUserInfo.avatar_url } }
-      : null;
-  }, [googleUserInfo]);
+  // Sessions live only within this workspace. Explicit refresh/remount clears them.
+  const mapSessions = useRef(new Map<string, { tree: MindMapNode; history: HistoryState; transform: CanvasTransform; selectedId: string | null }>());
+  const loadedMapId = useRef('');
+  const viewState = useRef({ tree, history, transform, selectedId });
+  viewState.current = { tree, history, transform, selectedId };
 
-  // Client configuration and reference
-  const tokenClientRef = useRef<any>(null);
-
-  // Sync state reference to avoid stale updates
-  const saveTimeoutRef = useRef<any | null>(null);
+  // Active document view state
   const activeMapIdRef = useRef(activeMapId);
   const mapTransformsRef = useRef<Record<string, CanvasTransform>>({});
 
@@ -219,187 +185,33 @@ export const useMindMap = () => {
     }
   }, []);
 
-  const handleSuccessfulLogin = useCallback(async (token: string) => {
-    setIsMapsListLoaded(false);
-    setIsSyncing(true);
-    try {
-      // 1. Fetch Google user info
-      const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!userRes.ok) throw new Error('Failed to fetch Google user info');
-      const gUser = await userRes.json();
-      
-      const userInfo = {
-        name: gUser.name,
-        email: gUser.email,
-        avatar_url: gUser.picture
-      };
-      setGoogleUserInfo(userInfo);
-      localStorage.setItem('google_user_info', JSON.stringify(userInfo));
-
-      // 2. Get or create app folder on Drive
-      const folderId = await googleDriveClient.getOrCreateAppFolder(token);
-      setGoogleFolderId(folderId);
-      localStorage.setItem('google_folder_id', folderId);
-    } catch (err) {
-      console.error('Failed to setup Google Drive session:', err);
-      // Logout on error to reset state
-      logoutGoogle();
-    } finally {
-      setIsSyncing(false);
-    }
-  }, []);
-
-  const logoutGoogle = useCallback(() => {
-    setGoogleAccessToken(null);
-    setGoogleTokenExpiry(0);
-    setGoogleUserInfo(null);
-    setGoogleFolderId(null);
-    setIsMapsListLoaded(false);
-    
-    localStorage.removeItem('google_access_token');
-    localStorage.removeItem('google_token_expiry');
-    localStorage.removeItem('google_folder_id');
-    localStorage.removeItem('google_user_info');
-    localStorage.removeItem('google_drive_connected');
-    
-    setActiveMapId('default-map');
-    storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, 'default-map');
-  }, []);
-
-  // --- Auth Handling & Client Init ---
-  useEffect(() => {
-    const initGoogleClient = () => {
-      if (typeof google === 'undefined') {
-        setTimeout(initGoogleClient, 100);
-        return;
-      }
-
-      tokenClientRef.current = google.accounts.oauth2.initTokenClient({
-        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-        scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
-        callback: async (response: any) => {
-          if (response.error) {
-            console.error('Google authorization error:', response);
-            return;
-          }
-          const token = response.access_token;
-          const expiresAt = Date.now() + (response.expires_in || 3600) * 1000 - 60000;
-          
-          setGoogleAccessToken(token);
-          setGoogleTokenExpiry(expiresAt);
-          localStorage.setItem('google_access_token', token);
-          localStorage.setItem('google_token_expiry', expiresAt.toString());
-          localStorage.setItem('google_drive_connected', 'true');
-          
-          await handleSuccessfulLogin(token);
-        }
-      });
-      
-      // Silent refresh / restore connection on reload
-      const isConnected = localStorage.getItem('google_drive_connected') === 'true';
-      const cachedToken = localStorage.getItem('google_access_token');
-      const cachedExpiry = localStorage.getItem('google_token_expiry');
-      
-      if (isConnected) {
-        if (cachedToken && cachedExpiry && Date.now() < parseInt(cachedExpiry)) {
-          setGoogleAccessToken(cachedToken);
-          setGoogleTokenExpiry(parseInt(cachedExpiry));
-          handleSuccessfulLogin(cachedToken);
-        } else {
-          // Silent token request
-          tokenClientRef.current?.requestAccessToken({ prompt: '' });
-        }
-      }
-    };
-
-    initGoogleClient();
-  }, [handleSuccessfulLogin]);
-
-  const getValidToken = useCallback(async (): Promise<string> => {
-    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
-    if (!isConnected) throw new Error('Google Drive is not connected');
-
-    const token = googleAccessToken || localStorage.getItem('google_access_token');
-    const expiry = googleTokenExpiry || parseInt(localStorage.getItem('google_token_expiry') || '0');
-
-    if (token && expiry && Date.now() < expiry) {
-      return token;
-    }
-
-    return new Promise((resolve, reject) => {
-      if (!tokenClientRef.current) {
-        reject(new Error('Google Identity Services client not initialized'));
-        return;
-      }
-
-      const originalCallback = tokenClientRef.current.callback;
-      tokenClientRef.current.callback = async (response: any) => {
-        tokenClientRef.current.callback = originalCallback;
-
-        if (response.error) {
-          reject(new Error(`Google silent auth failed: ${response.error}`));
-          return;
-        }
-
-        const token = response.access_token;
-        const expiresAt = Date.now() + (response.expires_in || 3600) * 1000 - 60000;
-
-        setGoogleAccessToken(token);
-        setGoogleTokenExpiry(expiresAt);
-        localStorage.setItem('google_access_token', token);
-        localStorage.setItem('google_token_expiry', expiresAt.toString());
-
-        await handleSuccessfulLogin(token);
-        resolve(token);
-      };
-
-      tokenClientRef.current.requestAccessToken({ prompt: '' });
-    });
-  }, [handleSuccessfulLogin, googleAccessToken, googleTokenExpiry]);
-
-  const syncFoldersToDriveConfig = useCallback(async (latestFolders: FolderItem[], latestMapFolderMap: Record<string, string>) => {
-    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
-    if (!isConnected) return;
-    try {
-      const token = await getValidToken();
-      const folderId = localStorage.getItem('google_folder_id') || googleFolderId;
-      if (token && folderId) {
-        await googleDriveClient.saveConfigFile(token, folderId, {
-          folders: latestFolders,
-          mapFolderMap: latestMapFolderMap
-        });
-      }
-    } catch (err) {
-      console.error('Failed to sync folder config to Drive:', err);
-    }
-  }, [getValidToken, googleFolderId]);
-
   const createFolder = useCallback(async (name?: string) => {
+    try {
     const finalName = name || t('untitledFolder');
     const newId = 'folder-' + Math.random().toString(36).substring(2, 9);
     const newFolder: FolderItem = { id: newId, name: finalName, isCollapsed: false };
     const updated = [...folders, newFolder];
-    setFolders(updated);
     await storage.setSetting('mindsprout_folders', JSON.stringify(updated));
-    syncFoldersToDriveConfig(updated, mapFolderMap);
+    setFolders(updated);
     return newId;
-  }, [folders, mapFolderMap, syncFoldersToDriveConfig, t]);
+    } catch (error) { setStorageError(String(error)); }
+  }, [folders, t]);
 
   const renameFolder = useCallback(async (folderId: string, newName: string) => {
+    try {
     if (!newName.trim()) return;
     const updated = folders.map(f => f.id === folderId ? { ...f, name: newName.trim() } : f);
-    setFolders(updated);
     await storage.setSetting('mindsprout_folders', JSON.stringify(updated));
-    syncFoldersToDriveConfig(updated, mapFolderMap);
-  }, [folders, mapFolderMap, syncFoldersToDriveConfig]);
+    setFolders(updated);
+    } catch (error) { setStorageError(String(error)); }
+  }, [folders]);
 
   const deleteFolder = useCallback(async (folderId: string) => {
+    try {
     if (folderId === 'default') return;
     const updatedFolders = folders.filter(f => f.id !== folderId);
-    setFolders(updatedFolders);
     await storage.setSetting('mindsprout_folders', JSON.stringify(updatedFolders));
+    setFolders(updatedFolders);
 
     const updatedMapFolder = { ...mapFolderMap };
     Object.keys(updatedMapFolder).forEach(mapId => {
@@ -407,23 +219,26 @@ export const useMindMap = () => {
         delete updatedMapFolder[mapId];
       }
     });
-    setMapFolderMap(updatedMapFolder);
     await storage.setSetting('mindsprout_map_folders', JSON.stringify(updatedMapFolder));
-    syncFoldersToDriveConfig(updatedFolders, updatedMapFolder);
-  }, [folders, mapFolderMap, syncFoldersToDriveConfig]);
+    setMapFolderMap(updatedMapFolder);
+    } catch (error) { setStorageError(String(error)); }
+  }, [folders, mapFolderMap]);
 
   const toggleFolderCollapse = useCallback(async (folderId: string) => {
+    try {
     const updated = folders.map(f => f.id === folderId ? { ...f, isCollapsed: !f.isCollapsed } : f);
-    setFolders(updated);
     await storage.setSetting('mindsprout_folders', JSON.stringify(updated));
+    setFolders(updated);
+    } catch (error) { setStorageError(String(error)); }
   }, [folders]);
 
   const moveMapToFolder = useCallback(async (mapId: string, targetFolderId: string) => {
+    try {
     const updated = { ...mapFolderMap, [mapId]: targetFolderId };
-    setMapFolderMap(updated);
     await storage.setSetting('mindsprout_map_folders', JSON.stringify(updated));
-    syncFoldersToDriveConfig(folders, updated);
-  }, [folders, mapFolderMap, syncFoldersToDriveConfig]);
+    setMapFolderMap(updated);
+    } catch (error) { setStorageError(String(error)); }
+  }, [mapFolderMap]);
 
   // --- Local Mode Helper ---
   // Seed initial local maps if empty
@@ -432,17 +247,8 @@ export const useMindMap = () => {
     if (maps && maps.length > 0) {
       return maps;
     }
-    const initialTree = treeUtils.createInitialTree(t('myMindMap'));
-    const defaultTitle = initialTree.children?.[0]?.text || t('myMindMap');
-    const defaultMap = {
-      id: 'default-map',
-      title: defaultTitle,
-      content: initialTree,
-      updated_at: new Date().toISOString()
-    };
-    await storage.saveMap(defaultMap.id, defaultMap.title, defaultMap.content, defaultMap.updated_at);
-    return [defaultMap];
-  }, [t]);
+    return [];
+  }, []);
 
   // --- Custom Sort Order Helper ---
   const applyCustomSort = useCallback(async (items: any[]) => {
@@ -469,250 +275,99 @@ export const useMindMap = () => {
 
   // --- Load / Fetch Maps List ---
   const fetchMapsList = useCallback(async () => {
-    // Phase 1: Always load local SQLite / LocalStorage maps first for instant UI
-    const localMaps = await getLocalMaps();
-    if (localMaps.length > 0) {
-      const list = localMaps.map((m) => ({
-        id: m.id,
-        title: m.title,
-        updated_at: m.updated_at
-      }));
-      setMapsList(await applyCustomSort(list));
-      setIsMapsListLoaded(true);
-      if (!list.some((m) => m.id === activeMapId)) {
-        setActiveMapId(list[0].id);
-        storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, list[0].id);
-      }
-    }
-
-    // Phase 2: Background Google Drive sync (if enabled)
-    const isDriveConnected = localStorage.getItem('google_drive_connected') === 'true';
-    if (!isDriveConnected) {
-      if (localMaps.length === 0) {
-        const initialTree = treeUtils.createInitialTree();
-        const timeString = new Date().toISOString();
-        const initialMap = {
-          id: 'default-map',
-          title: initialTree.text,
-          content: initialTree,
-          updated_at: timeString
-        };
-        await storage.saveMap(initialMap.id, initialMap.title, initialMap.content, initialMap.updated_at);
-        setMapsList([{ id: initialMap.id, title: initialMap.title, updated_at: initialMap.updated_at }]);
-        setActiveMapId(initialMap.id);
-        await storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, initialMap.id);
-        setIsMapsListLoaded(true);
-      }
-      return;
-    }
-
-    setIsSyncing(true);
     try {
-      const token = await getValidToken();
-      const folderId = localStorage.getItem('google_folder_id') || googleFolderId;
-      if (!folderId || !token) return;
-
-      // Sync Google Drive mindsprout_config.json for cross-device folders
-      try {
-        const { data: driveConfig } = await googleDriveClient.getOrCreateConfigFile(token, folderId);
-        if (driveConfig) {
-          let mergedFolders: FolderItem[] = [...folders];
-          if (driveConfig.folders && Array.isArray(driveConfig.folders)) {
-            driveConfig.folders.forEach((df: FolderItem) => {
-              if (!mergedFolders.some(f => f.id === df.id)) {
-                mergedFolders.push(df);
-              } else {
-                mergedFolders = mergedFolders.map(f => f.id === df.id ? { ...f, name: df.name } : f);
-              }
-            });
-          }
-          if (mergedFolders.length === 0) {
-            mergedFolders = [{ id: 'default', name: t('myMindMaps'), isCollapsed: false }];
-          }
-
-          const mergedMapFolders = { ...mapFolderMap, ...(driveConfig.mapFolderMap || {}) };
-
-          setFolders(mergedFolders);
-          setMapFolderMap(mergedMapFolders);
-          await storage.setSetting('mindsprout_folders', JSON.stringify(mergedFolders));
-          await storage.setSetting('mindsprout_map_folders', JSON.stringify(mergedMapFolders));
-        }
-      } catch (configErr) {
-        console.error('Failed to sync Google Drive config file:', configErr);
-      }
-
-      // 1. Fetch current maps from Google Drive
-      const driveFiles = await googleDriveClient.listSproutFiles(token, folderId);
-      let driveMetadata: MindMapMetadata[] = driveFiles.map(f => {
-        let title = f.name.endsWith('.sprout') ? f.name.slice(0, -7) : f.name;
-        if (title === 'Virtual Root') title = t('myMindMap');
-        return {
-          id: f.id,
-          title,
-          updated_at: f.modifiedTime || f.createdTime || new Date().toISOString()
-        };
-      });
-
-      // 2. Upload unmigrated local maps to Drive
-      const currentLocalMaps = await getLocalMaps();
-      const unmigratedMaps = currentLocalMaps.filter(lm => {
-        return lm.id === 'default-map' || !driveMetadata.some(dm => dm.id === lm.id);
-      });
-
-      for (const localMap of unmigratedMaps) {
-        try {
-          const newFileId = await googleDriveClient.createSproutFile(token, folderId, localMap.title, {
-            id: localMap.id,
-            title: localMap.title,
-            content: localMap.content
-          });
-          await storage.deleteMap(localMap.id);
-          await storage.saveMap(newFileId, localMap.title, localMap.content, localMap.updated_at);
-          
-          if (activeMapId === localMap.id) {
-            setActiveMapId(newFileId);
-            storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, newFileId);
-          }
-
-          driveMetadata.push({
-            id: newFileId,
-            title: localMap.title,
-            updated_at: localMap.updated_at
-          });
-        } catch (migrationErr) {
-          console.error('Failed to migrate local map to Drive:', localMap.title, migrationErr);
-        }
-      }
-
-      // 3. Download missing Drive maps into local SQLite/LocalStorage
-      const freshLocalMaps = await getLocalMaps();
-      for (const dm of driveMetadata) {
-        if (!freshLocalMaps.some(lm => lm.id === dm.id)) {
-          try {
-            const sproutData = await googleDriveClient.downloadSproutFile(token, dm.id);
-            if (sproutData && sproutData.content) {
-              await storage.saveMap(dm.id, dm.title, sproutData.content, dm.updated_at);
-            }
-          } catch (dlErr) {
-            console.error('Failed to download missing Drive map to local storage:', dm.title, dlErr);
-          }
-        }
-      }
-
-      // 4. Update state with fully synced list
-      const syncedLocalMaps = await getLocalMaps();
-      const syncedList = syncedLocalMaps.map(m => ({
-        id: m.id,
-        title: m.title,
-        updated_at: m.updated_at
-      }));
-
-      setMapsList(await applyCustomSort(syncedList));
-      setIsMapsListLoaded(true);
-    } catch (err) {
-      console.error('Background Google Drive sync failed:', err);
-    } finally {
-      setIsSyncing(false);
-    }
-  }, [user, activeMapId, getLocalMaps, applyCustomSort, getValidToken, googleFolderId, t]);
-
-  useEffect(() => {
-    fetchMapsList();
-  }, [user, googleFolderId, googleAccessToken]);
-
-
-  // --- Load Selected Map Content ---
-  useEffect(() => {
-    const loadActiveMapContent = async () => {
-      if (!activeMapId) return;
-
       const localMaps = await getLocalMaps();
-      const activeMap = localMaps.find((m) => m.id === activeMapId);
-      if (activeMap) {
-        const migrated = migrateTree(activeMap.content);
-        const finalTree = isAutoLayout ? treeUtils.clearSubNodeOffsets(migrated) : migrated;
-        setTree(finalTree);
-        setHistory({ past: [], present: finalTree, future: [] });
+      setMapsList(await applyCustomSort(localMaps.map(({id, title, updated_at}) => ({id, title, updated_at}))));
+      const previous = await storage.getSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, '');
+      setActiveMapId(localMaps.find(m => m.id === previous)?.id || localMaps[0]?.id || '');
+      setIsMapsListLoaded(true);
+    } catch (error) { setStorageError(String(error)); }
+  }, [getLocalMaps, applyCustomSort]);
+  useEffect(() => { void fetchMapsList(); }, [fetchMapsList]);
 
-        setTimeout(centerCanvas, 50);
-        setTimeout(centerCanvas, 200);
-        setTimeout(centerCanvas, 500);
-
-        setTimeout(() => {
-          setTree((prev) => prev ? { ...prev } : prev);
-        }, 500);
-      } else if (localMaps.length > 0) {
-        const migrated = migrateTree(localMaps[0].content);
-        const finalTree = isAutoLayout ? treeUtils.clearSubNodeOffsets(migrated) : migrated;
-        setTree(finalTree);
-        setActiveMapId(localMaps[0].id);
-        setHistory({ past: [], present: finalTree, future: [] });
-
-        setTimeout(centerCanvas, 50);
-        setTimeout(centerCanvas, 200);
-        setTimeout(centerCanvas, 500);
-
-        setTimeout(() => {
-          setTree((prev) => prev ? { ...prev } : prev);
-        }, 500);
+  // Load each document once per workspace session; revisits restore its in-memory state.
+  useEffect(() => {
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const loadActiveMapContent = async () => {
+      if (!activeMapId) { loadedMapId.current = ''; savedTree.current = null; return; }
+      const session = mapSessions.current.get(activeMapId);
+      if (session) {
+        loadedMapId.current = activeMapId;
+        savedTree.current = session.tree;
+        currentTreeRef.current = session.tree;
+        setTree(session.tree); setHistory(session.history); setTransform(session.transform);
+        setSelectedId(session.selectedId); setEditingId(null);
+        return;
       }
+      const localMaps = await getLocalMaps();
+      if (cancelled) return;
+      const activeMap = localMaps.find(m => m.id === activeMapId);
+      if (!activeMap) throw new Error('找不到心智圖，請重新整理工作目錄');
+      const migrated = migrateTree(activeMap.content);
+      const finalTree = autoLayoutRef.current ? treeUtils.clearSubNodeOffsets(migrated) : migrated;
+      loadedMapId.current = activeMapId;
+      savedTree.current = finalTree;
+      currentTreeRef.current = finalTree;
+      setTree(finalTree); setHistory({past: [], present: finalTree, future: []});
+      setSelectedId('root'); setEditingId(null);
+      for (const delay of [50, 200, 500]) timers.push(setTimeout(() => {
+        if (!cancelled && loadedMapId.current === activeMapId) centerCanvas();
+      }, delay));
     };
-
-    loadActiveMapContent();
-  }, [activeMapId, centerCanvas]);
+    void loadActiveMapContent().catch(error => { if (!cancelled) setStorageError(String(error)); });
+    return () => { cancelled = true; timers.forEach(clearTimeout); };
+  }, [activeMapId, centerCanvas, getLocalMaps]);
 
   // --- Sync / Auto Save Content ---
-  const saveMapData = useCallback((currentTree: MindMapNode, forceImmediate = false) => {
-    const timeString = new Date().toISOString();
-    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
-    const targetFileId = activeMapId;
-
-    // 1. Always update storage immediately for fast offline saving
-    storage.saveMap(targetFileId, currentTree.text, currentTree, timeString);
-
-    // Sync metadata title and time in mapsList state instantly
-    setMapsList((prev) =>
-      prev.map((m) => (m.id === targetFileId ? { ...m, title: currentTree.text, updated_at: timeString } : m))
-    );
-
-    // 2. Google Drive upload
-    if (isConnected) {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
-
-      const performUpload = async () => {
-        setSyncStatus('syncing');
-        try {
-          const token = await getValidToken();
-          await googleDriveClient.updateSproutFile(token, targetFileId, {
-            id: targetFileId,
-            title: currentTree.text,
-            content: currentTree
-          });
-
-          const currentMeta = mapsList.find(m => m.id === targetFileId);
-          if (currentMeta && currentMeta.title !== currentTree.text) {
-            await googleDriveClient.renameSproutFile(token, targetFileId, currentTree.text);
-          }
-          setSyncStatus('saved');
-        } catch (err) {
-          console.error('Failed to sync content with Google Drive:', err);
-          setSyncStatus('error');
+  const saveMapData = useCallback((currentTree: MindMapNode, _forceImmediate = false): Promise<boolean> => {
+    if (!activeMapId) return Promise.resolve(true);
+    const generation = ++saveGeneration.current;
+    const targetId = activeMapId;
+    const title = currentTree.id === 'virtual-root' ? currentTree.children?.[0]?.text || t('untitledMap') : currentTree.text;
+    setSyncStatus('syncing');
+    const operation = pendingSave.current.then(async () => {
+      try {
+        const updated = new Date().toISOString();
+        await storage.saveMap(targetId, title, currentTree, updated);
+        if (generation === saveGeneration.current) {
+          savedTree.current = currentTree;
+          setSyncStatus('saved'); setStorageError('');
         }
-      };
-
-      if (forceImmediate) {
-        performUpload();
-      } else {
-        // Only mark as dirty (unsaved local changes), do NOT schedule background upload!
-        setSyncStatus('dirty');
+        setMapsList(prev => prev.map(m => m.id === targetId ? { ...m, title, updated_at: updated } : m));
+        return true;
+      } catch (error) {
+        setSyncStatus('error'); setStorageError(String(error));
+        return false;
       }
-    }
-  }, [activeMapId, getLocalMaps, getValidToken, mapsList]);
+    });
+    pendingSave.current = operation;
+    return operation;
+  }, [activeMapId, t]);
+
+  useEffect(() => {
+    window.onbeforeunload = () => syncStatus === 'error' || syncStatus === 'syncing' || (activeMapId && tree !== savedTree.current) ? '' : null;
+    return () => { window.onbeforeunload = null; };
+  }, [syncStatus, tree, activeMapId]);
+  useEffect(() => window.electronAPI?.onCloseRequested(async () => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const success = await saveMapData(currentTreeRef.current, true);
+    window.electronAPI!.closeReady(success);
+  }), [tree, saveMapData]);
+  useEffect(() => {
+    const save = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault(); void saveMapData(tree, true);
+      }
+    };
+    window.addEventListener('keydown', save);
+    return () => window.removeEventListener('keydown', save);
+  }, [tree, saveMapData]);
 
   // Tree modifier with history
   const updateTreeState = useCallback((newTree: MindMapNode) => {
+    currentTreeRef.current = newTree;
     setTree(newTree);
     setHistory((prev) => ({
       past: [...prev.past, prev.present],
@@ -721,6 +376,42 @@ export const useMindMap = () => {
     }));
     saveMapData(newTree);
   }, [saveMapData]);
+
+  const clipboardContext = useRef({ tree, activeMapId, selectedId });
+  clipboardContext.current = { tree, activeMapId, selectedId };
+  const [clipboardMessage, setClipboardMessage] = useState('');
+  const copySelectedBranch = useCallback(async () => {
+    if (!activeMapId || !selectedId || !savedTree.current) return;
+    try {
+      await window.electronAPI!.copyNodes(copyBranch(tree, selectedId));
+      setClipboardMessage(t('branchCopied'));
+    } catch { setClipboardMessage(t('branchCopyFailed')); }
+  }, [tree, activeMapId, selectedId, t]);
+  const pasteSelectedBranch = useCallback(async () => {
+    if (!activeMapId || !savedTree.current) return;
+    const mapId = activeMapId;
+    const parentId = selectedId || tree.children[0]?.id;
+    if (!parentId) return;
+    try {
+      const branch = readBranch(await window.electronAPI!.readNodes());
+      if (!branch) { setClipboardMessage(t('branchClipboardEmpty')); return; }
+      const current = clipboardContext.current;
+      if (current.activeMapId !== mapId || !treeUtils.findNode(current.tree, parentId)) return;
+      const cloned = cloneBranch(branch);
+      let newTree = treeUtils.addChildNode(current.tree, parentId, cloned.node);
+      if (parentId === 'root') newTree = treeUtils.updateNode(newTree, parentId, { isLeftCollapsed: false, isRightCollapsed: false });
+      newTree = { ...newTree, relationships: [...(newTree.relationships || []), ...cloned.relationships] };
+      clipboardContext.current = { ...current, tree: newTree, selectedId: cloned.node.id };
+      updateTreeState(newTree);
+      setSelectedId(cloned.node.id); setEditingId(null);
+      setClipboardMessage(t('branchPasted'));
+    } catch { setClipboardMessage(t('branchPasteFailed')); }
+  }, [activeMapId, tree, selectedId, updateTreeState, t]);
+  useEffect(() => {
+    if (!clipboardMessage) return;
+    const timer = setTimeout(() => setClipboardMessage(''), 3500);
+    return () => clearTimeout(timer);
+  }, [clipboardMessage]);
 
   // Save transform state
   useEffect(() => {
@@ -747,165 +438,91 @@ export const useMindMap = () => {
   }, [saveMapData]);
 
   // --- Switch Map ---
-  const switchMap = useCallback((id: string) => {
-    // Force save unsaved changes immediately before switching
-    if (syncStatus === 'dirty') {
-      saveMapData(tree, true);
-    }
-    setActiveMapId(id);
-    storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, id);
-    setSelectedId('root');
-    setEditingId(null);
-  }, [tree, saveMapData, syncStatus]);
+  const switchMap = useCallback(async (id: string) => {
+    if (id === activeMapId) return;
+    try {
+      if (activeMapId && loadedMapId.current !== activeMapId) return;
+      if (activeMapId && (tree !== savedTree.current || syncStatus !== 'saved')) {
+        if (!await saveMapData(currentTreeRef.current, true)) return;
+      } else if (!await pendingSave.current) return;
+      await storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, id);
+      if (activeMapId) mapSessions.current.set(activeMapId, { ...viewState.current });
+      savedTree.current = null;
+      loadedMapId.current = '';
+      setActiveMapId(id);
+      setSelectedId('root'); setEditingId(null); setConnectingSourceId(null);
+    } catch (error) { setStorageError(String(error)); }
+  }, [tree, saveMapData, syncStatus, activeMapId]);
 
-  // --- Create Map ---
   const createNewMap = useCallback(async (title?: string, folderId?: string) => {
-    const finalTitle = title || t('untitledMap');
-    const initialTree = {
-      id: 'root',
-      text: finalTitle,
-      children: []
-    };
-    const timeString = new Date().toISOString();
-    const newId = Math.random().toString(36).substring(2, 9);
-
-    await storage.saveMap(newId, finalTitle, initialTree, timeString);
-    if (folderId && folderId !== 'default') {
-      const updatedMapFolders = { ...mapFolderMap, [newId]: folderId };
-      setMapFolderMap(updatedMapFolders);
-      await storage.setSetting('mindsprout_map_folders', JSON.stringify(updatedMapFolders));
-    }
-    setMapsList((prev) => [{ id: newId, title: finalTitle, updated_at: timeString }, ...prev]);
-    switchMap(newId);
-
-    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
-    if (isConnected) {
-      setIsSyncing(true);
-      try {
-        const token = await getValidToken();
-        const gFolderId = localStorage.getItem('google_folder_id') || googleFolderId;
-        if (!gFolderId) throw new Error('Google Folder ID not set');
-
-        const fileId = await googleDriveClient.createSproutFile(token, gFolderId, finalTitle, {
-          id: newId,
-          title: finalTitle,
-          content: initialTree
-        });
-
-        await storage.deleteMap(newId);
-        await storage.saveMap(fileId, finalTitle, initialTree, timeString);
-
-        if (folderId && folderId !== 'default') {
-          const updatedMapFolders = { ...mapFolderMap };
-          delete updatedMapFolders[newId];
-          updatedMapFolders[fileId] = folderId;
-          setMapFolderMap(updatedMapFolders);
-          await storage.setSetting('mindsprout_map_folders', JSON.stringify(updatedMapFolders));
-        }
-
-        setMapsList((prev) => prev.map(m => m.id === newId ? { ...m, id: fileId } : m));
-        switchMap(fileId);
-      } catch (err) {
-        console.error('Failed to create new map in Google Drive:', err);
-      } finally {
-        setIsSyncing(false);
+    try {
+      if (activeMapId && !await saveMapData(tree, true)) return;
+      const finalTitle = title || t('untitledMap');
+      const content = { ...migrateTree({ id: 'root', text: finalTitle, children: [] }), themeId: 'focus-mint' };
+      const id = crypto.randomUUID();
+      const updated_at = new Date().toISOString();
+      await storage.saveMap(id, finalTitle, content, updated_at);
+      if (folderId && folderId !== 'default') {
+        const updated = { ...mapFolderMap, [id]: folderId };
+        await storage.setSetting('mindsprout_map_folders', JSON.stringify(updated));
+        setMapFolderMap(updated);
       }
-    }
-  }, [user, switchMap, getLocalMaps, getValidToken, googleFolderId, mapFolderMap, t]);
+      setMapsList(prev => [{ id, title: finalTitle, updated_at }, ...prev]);
+      await switchMap(id);
+    } catch (error) { setStorageError(String(error)); }
+  }, [activeMapId, tree, saveMapData, t, mapFolderMap, switchMap]);
 
-  // --- Delete Map ---
   const deleteMap = useCallback(async (id: string) => {
-    if (mapsList.length <= 1) {
-      alert(t('atLeastOneMap'));
-      return;
-    }
-
-    if (id === activeMapId) {
-      const remaining = mapsList.filter((m) => m.id !== id);
-      switchMap(remaining[0].id);
-    }
-
-    // 1. Delete from local SQLite / LocalStorage
-    await storage.deleteMap(id);
-
-    // 2. Remove from custom order
-    const savedOrder = await storage.getSetting('mindsprout_maps_order', '');
-    if (savedOrder) {
-      try {
-        const orderIds = JSON.parse(savedOrder);
-        const newOrder = orderIds.filter((oid: string) => oid !== id);
-        await storage.setSetting('mindsprout_maps_order', JSON.stringify(newOrder));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    // 3. Delete from Google Drive if connected
-    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
-    if (isConnected) {
-      setIsSyncing(true);
-      try {
-        const token = await getValidToken();
-        await googleDriveClient.deleteSproutFile(token, id);
-      } catch (err) {
-        console.error('Failed to delete map from Google Drive:', err);
-      } finally {
-        setIsSyncing(false);
-      }
-    }
-
-    // 4. Update state UI
-    setMapsList((prev) => prev.filter((m) => m.id !== id));
-  }, [activeMapId, mapsList, user, switchMap, getValidToken, t]);
-
-  // --- Rename Map ---
-  const renameMap = useCallback(async (id: string, newTitle: string) => {
-    if (newTitle.trim() === '') return;
-    const timeString = new Date().toISOString();
-    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
-
-    if (isConnected) {
-      setIsSyncing(true);
-      try {
-        const token = await getValidToken();
-        await googleDriveClient.renameSproutFile(token, id, newTitle);
-        
-        setMapsList((prev) =>
-          prev.map((m) => (m.id === id ? { ...m, title: newTitle, updated_at: timeString } : m))
-        );
-
-        if (id === activeMapId) {
-          setTree((prev) => ({ ...prev, text: newTitle }));
-        }
-      } catch (err) {
-        console.error('Failed to rename map in Google Drive:', err);
-      } finally {
-        setIsSyncing(false);
-      }
-    } else {
-      // Local Mode
-      const localMaps = await getLocalMaps();
-      const updated = localMaps.map((m) => {
-        if (m.id === id) {
-          const updatedContent = { ...m.content, text: newTitle };
-          return {
-            ...m,
-            title: newTitle,
-            content: updatedContent,
-            updated_at: timeString
-          };
-        }
-        return m;
-      });
-      localStorage.setItem(LOCAL_STORAGE_MAPS_KEY, JSON.stringify(updated));
-      
-      setMapsList(updated.map(m => ({ id: m.id, title: m.title, updated_at: m.updated_at })));
-      
+    try {
+      if (!await pendingSave.current) return;
+      await storage.deleteMap(id);
+      mapSessions.current.delete(id);
+      const remaining = mapsList.filter(m => m.id !== id);
+      setMapsList(remaining);
       if (id === activeMapId) {
-        setTree((prev) => ({ ...prev, text: newTitle }));
+        setActiveMapId(remaining[0]?.id || '');
+        await storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, remaining[0]?.id || '');
       }
-    }
-  }, [user, activeMapId, getLocalMaps, getValidToken]);
+    } catch (error) { setStorageError(String(error)); }
+  }, [activeMapId, mapsList]);
+
+  const renameMap = useCallback(async (id: string, newTitle: string) => {
+    if (!newTitle.trim()) return;
+    try {
+      if (!await pendingSave.current) return;
+      const map = (await getLocalMaps()).find(m => m.id === id);
+      if (!map) return;
+      const content = migrateTree(id === activeMapId ? tree : mapSessions.current.get(id)?.tree || map.content);
+      const renamed = { ...content, children: content.children.map((n: MindMapNode, i: number) => i === 0 ? { ...n, text: newTitle.trim() } : n) };
+      const updated = new Date().toISOString();
+      await storage.saveMap(id, newTitle.trim(), renamed, updated);
+      setMapsList(prev => prev.map(m => m.id === id ? { ...m, title: newTitle.trim(), updated_at: updated } : m));
+      const cached = mapSessions.current.get(id);
+      if (cached) mapSessions.current.set(id, { ...cached, tree: renamed, history: { past: [], present: renamed, future: [] } });
+      if (id === activeMapId) { setTree(renamed); savedTree.current = renamed; setHistory({past: [], present: renamed, future: []}); }
+    } catch (error) { setStorageError(String(error)); }
+  }, [activeMapId, tree, getLocalMaps]);
+
+  const duplicateMap = useCallback(async (sourceId: string) => {
+    try {
+      if (activeMapId && !await saveMapData(tree, true)) return;
+      const source = (await getLocalMaps()).find(m => m.id === sourceId);
+      if (!source) return;
+      const title = source.title + '（副本）';
+      const content = structuredClone(sourceId === activeMapId ? tree : mapSessions.current.get(sourceId)?.tree || source.content);
+      const id = crypto.randomUUID();
+      const updated_at = new Date().toISOString();
+      await storage.saveMap(id, title, content, updated_at);
+      const folder = mapFolderMap[sourceId];
+      if (folder) {
+        const updated = { ...mapFolderMap, [id]: folder };
+        await storage.setSetting('mindsprout_map_folders', JSON.stringify(updated));
+        setMapFolderMap(updated);
+      }
+      setMapsList(prev => [{ id, title, updated_at }, ...prev]);
+      await switchMap(id);
+    } catch (error) { setStorageError(String(error)); }
+  }, [activeMapId, tree, saveMapData, getLocalMaps, mapFolderMap, switchMap]);
 
   // --- Undo & Redo ---
   const undo = useCallback(() => {
@@ -1113,70 +730,17 @@ export const useMindMap = () => {
   }, [tree, updateTreeState]);
 
   const importTree = useCallback(async (newTree: MindMapNode) => {
-    // If the imported tree doesn't have a valid ID or structure, fix it
-    const sanitized = {
-      ...newTree,
-      id: newTree.id || 'root'
-    };
-    const migrated = migrateTree(sanitized);
-    const title = migrated.text || t('importedMap');
-    const timeString = new Date().toISOString();
-    const isConnected = localStorage.getItem('google_drive_connected') === 'true';
-
-    if (isConnected) {
-      setIsSyncing(true);
-      try {
-        const token = await getValidToken();
-        const folderId = localStorage.getItem('google_folder_id') || googleFolderId;
-        if (!folderId) throw new Error('Google Folder ID not set');
-
-        const fileId = await googleDriveClient.createSproutFile(token, folderId, title, {
-          id: '',
-          title,
-          content: migrated
-        });
-
-        setMapsList((prev) => [{ id: fileId, title, updated_at: timeString }, ...prev]);
-        setActiveMapId(fileId);
-        storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, fileId);
-        
-        // Instantly set states to prevent loading delay
-        setTree(migrated);
-        setHistory({
-          past: [],
-          present: migrated,
-          future: []
-        });
-        setSelectedId('root');
-        setEditingId(null);
-        setTimeout(() => centerCanvas(), 100);
-      } catch (err) {
-        console.error('Failed to import map to Google Drive:', err);
-        alert(t('importFailed'));
-      } finally {
-        setIsSyncing(false);
-      }
-    } else {
-      // Local Mode
-      const newId = Math.random().toString(36).substring(2, 9);
-      await storage.saveMap(newId, title, migrated, timeString);
-      
-      setMapsList((prev) => [{ id: newId, title, updated_at: timeString }, ...prev]);
-      setActiveMapId(newId);
-      storage.setSetting(LOCAL_STORAGE_ACTIVE_ID_KEY, newId);
-      
-      // Instantly set states
-      setTree(migrated);
-      setHistory({
-        past: [],
-        present: migrated,
-        future: []
-      });
-      setSelectedId('root');
-      setEditingId(null);
-      setTimeout(() => centerCanvas(), 100);
-    }
-  }, [user, getLocalMaps, centerCanvas, getValidToken, googleFolderId, t]);
+    try {
+      if (activeMapId && !await saveMapData(tree, true)) return;
+      const migrated = migrateTree({ ...newTree, id: newTree.id || 'root' });
+      const title = migrated.children?.[0]?.text || t('importedMap');
+      const id = crypto.randomUUID();
+      const updated_at = new Date().toISOString();
+      await storage.saveMap(id, title, migrated, updated_at);
+      setMapsList(prev => [{ id, title, updated_at }, ...prev]);
+      await switchMap(id);
+    } catch (error) { setStorageError(String(error)); }
+  }, [activeMapId, tree, saveMapData, t, switchMap]);
 
   // --- Drag Operations ---
   const updateNodeOffsetSilent = useCallback((targetId: string, offset: { x: number; y: number } | undefined) => {
@@ -1389,19 +953,6 @@ export const useMindMap = () => {
     }
   }, [saveMapData]);
 
-  // --- Auth Operations ---
-  const loginWithGoogle = async () => {
-    if (tokenClientRef.current) {
-      tokenClientRef.current.requestAccessToken();
-    } else {
-      console.error('Google client not initialized yet');
-    }
-  };
-
-  const logout = async () => {
-    logoutGoogle();
-  };
-
   const reorderMapsList = useCallback((startIndex: number, endIndex: number) => {
     setMapsList(prev => {
       const result = Array.from(prev);
@@ -1421,8 +972,6 @@ export const useMindMap = () => {
     editingId,
     transform,
     theme,
-    user,
-    isSyncing,
     history,
     mapsList,
     activeMapId,
@@ -1442,10 +991,9 @@ export const useMindMap = () => {
     toggleCollapse,
     importTree,
     centerCanvas,
-    loginWithGoogle,
-    logout,
     switchMap,
     createNewMap,
+    duplicateMap,
     deleteMap,
     renameMap,
     updateNodeOffsetSilent,
@@ -1453,8 +1001,6 @@ export const useMindMap = () => {
     createFloatingNode,
     reparentNode,
     reorderNode,
-    isOutlinerMode,
-    setIsOutlinerMode,
     indentNodeSelected,
     outdentNodeSelected,
     isAutoLayout,
@@ -1479,7 +1025,10 @@ export const useMindMap = () => {
     deleteFolder,
     toggleFolderCollapse,
     moveMapToFolder,
-    isGoogleDriveConfigured: !!import.meta.env.VITE_GOOGLE_CLIENT_ID,
-    isSupabaseConfigured: !!import.meta.env.VITE_GOOGLE_CLIENT_ID
+    storageError,
+    copySelectedBranch,
+    pasteSelectedBranch,
+    clipboardMessage,
+    hasActiveMap: !!activeMapId && savedTree.current !== null,
   };
 };

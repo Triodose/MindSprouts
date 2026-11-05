@@ -4,7 +4,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'nature-earth',
     name: 'Nature Earth (自然大地)',
-    background: '#F9F6F0',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -48,7 +48,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'morandi-classic',
     name: 'Morandi Classic (經典莫蘭迪)',
-    background: '#F5F5F5',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -92,7 +92,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'japanese-traditional',
     name: 'Japanese Traditional (日式傳統)',
-    background: '#F7F8F6',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -136,7 +136,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'spring-pastel',
     name: 'Spring (春天)',
-    background: '#FFFDFB',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -180,7 +180,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'summer-vibrant',
     name: 'Summer (夏天)',
-    background: '#F4FAFB',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -224,7 +224,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'autumn-warmth',
     name: 'Autumn (秋天)',
-    background: '#FCF9F5',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -268,7 +268,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'winter-frost',
     name: 'Winter (冬天)',
-    background: '#F5FAF9',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -312,7 +312,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'cherry-blossom',
     name: 'Cherry Blossom (櫻花)',
-    background: '#FFF9FB',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -356,7 +356,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'starry-night',
     name: 'Starry Night (星空)',
-    background: '#F1F3FA',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -400,7 +400,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'meadow-green',
     name: 'Meadow (草地)',
-    background: '#F6F9F5',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -444,7 +444,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'future-sci-fi',
     name: 'Future (未來)',
-    background: '#F8FAFC',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -488,7 +488,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'space-galaxy',
     name: 'Space / Galaxy (太空)',
-    background: '#F7FFF7', // Comet light white canvas background
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node (NASA Blue)
@@ -532,7 +532,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'mysterious-magic',
     name: 'Mysterious (神秘)',
-    background: '#F6F3F7',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -576,7 +576,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'candy-rainbow',
     name: 'Candy Rainbow (多彩糖果)',
-    background: '#FCF8FF',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -620,7 +620,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'ocean-coral',
     name: 'Ocean Coral (海洋珊瑚)',
-    background: '#F0FBFC',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -664,7 +664,7 @@ export const THEMES: MindMapTheme[] = [
   {
     id: 'cyberpunk-neon',
     name: 'Cyberpunk Neon (霓虹龐克)',
-    background: '#0D0E15',
+    background: '#FFFFFF',
     isFilledTheme: true,
     
     // Root Node
@@ -698,7 +698,7 @@ export const THEMES: MindMapTheme[] = [
     relLabelColor: '#ffffff',
 
     accentColor: '#00F5D4',
-    textColor: '#ffffff',
+    textColor: '#303447',
     glassBackground: 'rgba(255, 0, 127, 0.15)',
     glassBorder: 'rgba(0, 245, 212, 0.15)',
     
@@ -706,5 +706,49 @@ export const THEMES: MindMapTheme[] = [
     branchColors: ['#FF007F', '#00F5D4', '#CCFF00', '#FF5400', '#9B5DE5', '#FFD700', '#00B4D8']
   }
 ];
+
+THEMES.push({
+  id: 'focus-mint', name: 'Focus Mint (專注薄荷)', background: '#FFFFFF', isFilledTheme: true,
+  rootBackground: '#286b53', rootColor: '#ffffff', rootBorder: '#286b53',
+  nodeDefaultBackground: '#edf6ef', nodeDefaultColor: '#365d45', nodeDefaultBorder: '#c8dfcf',
+  lineColor: '#8abca4', relLineColor: '#8d9fb1', relLineActiveColor: '#287356', relLabelBackground: '#ffffff', relLabelColor: '#365d45',
+  accentColor: '#287356', textColor: '#263f35', glassBackground: '#ffffff', glassBorder: '#e2ebe5',
+  branchColors: ['#8abca4', '#9eafc8', '#d6b298', '#b9a4ca', '#a5b1b4'],
+  levelBackgrounds: ['#286b53', '#edf6ef', '#f9fbf9'], levelColors: ['#ffffff', '#365d45', '#526b5b'], levelBorders: ['#286b53', '#c8dfcf', '#dce8df']
+});
+// 純白畫布搭配跨色系分支，分支依層級逐漸變淺；保留識別碼以相容既有文件。
+const whiteCanvasPalettes = [
+  { id: 'azure-white', name: '繽紛晴空', root: '#244A73', accent: '#2878C4', pale: '#EEF5FC', branches: ['#2878C4', '#DB6842', '#279879', '#9361BD', '#BD4F79'] },
+  { id: 'forest-white', name: '花園派對', root: '#285D4D', accent: '#318661', pale: '#EFF7F1', branches: ['#318661', '#D15A78', '#C18A25', '#448CC0', '#9863B3'] },
+  { id: 'lavender-white', name: '夢幻花火', root: '#574276', accent: '#8959B5', pale: '#F5F1FA', branches: ['#8959B5', '#D65E90', '#2D96AA', '#D08535', '#4C9A79'] },
+  { id: 'terracotta-white', name: '暖陽旅行', root: '#7B4934', accent: '#C36B35', pale: '#FCF3ED', branches: ['#C36B35', '#358DAB', '#C45362', '#789440', '#8267B3'] },
+  { id: 'graphite-white', name: '城市色票', root: '#344256', accent: '#497BA9', pale: '#F2F5F8', branches: ['#497BA9', '#BC5657', '#398B82', '#B7862D', '#8664A6'] },
+];
+
+THEMES.push(...whiteCanvasPalettes.map((palette): MindMapTheme => ({
+  id: palette.id,
+  name: palette.name,
+  background: '#FFFFFF',
+  isFilledTheme: true,
+  rootBackground: palette.root,
+  rootColor: '#FFFFFF',
+  rootBorder: palette.root,
+  nodeDefaultBackground: palette.accent,
+  nodeDefaultColor: '#FFFFFF',
+  nodeDefaultBorder: palette.accent,
+  levelBackgrounds: [palette.root, palette.accent, palette.pale],
+  levelColors: ['#FFFFFF', '#FFFFFF', palette.root],
+  levelBorders: [palette.root, palette.accent, palette.accent],
+  branchColors: palette.branches,
+  lineColor: palette.accent,
+  relLineColor: palette.accent,
+  relLineActiveColor: palette.root,
+  relLabelBackground: palette.pale,
+  relLabelColor: palette.root,
+  accentColor: palette.accent,
+  textColor: palette.root,
+  glassBackground: '#FFFFFF',
+  glassBorder: '#E2E8F0',
+})));
 
 export const DEFAULT_THEME = THEMES[0];

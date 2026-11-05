@@ -3,15 +3,18 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "main": "dist-electron/main.cjs",
+  "main": "dist/electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "electron:build-main": "esbuild electron/main.ts electron/preload.ts --platform=node --outdir=dist-electron --bundle --external:electron --external:sql.js --out-extension:.js=.cjs",
-    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5189 && npm run electron:build-main && electron dist-electron/main.cjs\"",
-    "electron:dist": "npm run build && npm run electron:build-main && electron-builder"
+    "electron:build-main": "esbuild electron/main.ts electron/preload.ts --platform=node --outdir=dist/electron --bundle --external:electron --external:sql.js --out-extension:.js=.cjs",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5189 && npm run electron:build-main && electron dist/electron/main.cjs\"",
+    "electron:dist": "npm run build && npm run electron:build-main && electron-builder",
+    "test:workspace": "esbuild tests/workspace.test.ts --bundle --platform=node --outfile=dist/tests/workspace-test.cjs && node --test dist/tests/workspace-test.cjs",
+    "test:desktop": "npm run build && npm run electron:build-main && electron tests/desktop-smoke.cjs",
+    "test:clipboard": "esbuild tests/nodeClipboard.test.ts --bundle --platform=node --outfile=dist/tests/node-clipboard-test.cjs && node --test dist/tests/node-clipboard-test.cjs"
   },
   "dependencies": {
     "html2canvas": "^1.4.1",
@@ -21,7 +24,6 @@
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
-    "@types/google.accounts": "^0.0.14",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

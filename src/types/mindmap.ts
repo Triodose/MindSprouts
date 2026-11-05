@@ -1,14 +1,15 @@
 export interface NodeStyle {
   color?: string;
   backgroundColor?: string;
+  fillStyle?: 'solid' | 'diagonal' | 'crosshatch' | 'horizontal' | 'vertical' | 'dots' | 'none';
   borderColor?: string;
   borderStyle?: 'solid' | 'dashed' | 'long-dashed' | 'dotted';
   fontSize?: string;
   fontWeight?: string;
+  strikethrough?: boolean;
   shape?: 'rounded' | 'rectangle' | 'underlined' | 'diamond' | 'circle';
   structure?: 'logic' | 'org' | 'mindmap' | 'logic-left' | 'tree' | 'brace' | 'timeline' | 'fishbone';
   lineStyle?: 'curve' | 'straight' | 'tapered';
-  handDrawn?: boolean;
 }
 
 export interface Relationship {
